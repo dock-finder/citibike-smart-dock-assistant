@@ -37,6 +37,17 @@ How it's built:
 
 > **Why not "run Dock Finder"?** Siri treats "run", "open", "launch" or "start" plus an app's name as "open the app", which beats the app's own phrases and needs the phone unlocked. If you still have the old MVP's **Dock Finder** shortcut in the Shortcuts app, delete it.
 
+### Siri AI tools (developer preview, `siri-ai-tools-preview` branch only)
+
+Apple's [Siri AI Developer Preview](https://developer.apple.com/documentation/appintents/siri-ai-developer-preview) lets Siri's own model call an app's intents as tools: it reads their titles and descriptions, picks one, and fills its parameters from what the rider said, with no fixed phrase. On this branch:
+
+- Every intent except Ask a Question and the Action Button's is marked `@AppIntent(.tool)`. Ask a Question is left out because Siri's model already does the routing it does; it stays for iPhones without the preview.
+- Every parameter has a description. Direct Me also takes any destination as text ("directions to a dock near Union Square"), which no phrase could fill.
+- Siri can look up saved places (`SavedPlaceQuery` is an `EnumerableEntityQuery`) and any station: the whole system is indexed in Spotlight (`StationSpotlightIndex`, at most once a day, with spoken names as keywords). Stations also show up in the rider's own Spotlight searches.
+- The App Shortcut phrases are unchanged and still work everywhere.
+
+Building it needs Xcode with the **iOS 27.3 beta SDK** (`ToolIntent` and `@AppIntent(_:)` aren't in earlier SDKs), and testing it needs an iPhone on iOS 27.3 beta with Apple Intelligence. Apple doesn't allow the preview in App Store builds or for external TestFlight testers, so this branch isn't meant to be merged as is. Try requests without "Ask Dock Finder" while a ride or directions Live Activity is running ("is Mercer and Bleecker full?", "get me to a dock near Union Square"); otherwise mention Dock Finder. The **Siri Integration Advisor** in the beta Xcode reports on the tools.
+
 ## The Action Button
 
 One press tells the rider the nearest dock with room, out loud. Set up once: **Settings → Action Button**, swipe to **Controls**, **Choose a Control**, then **Speak Nearest Dock** (search "Dock Finder"). Press and hold the button: *"West 15th and 6th has 53 docks open, 300 feet away."* It also appears in the Shortcuts app as **Speak Nearest Dock**, for a shortcut assigned under **Settings → Action Button → Shortcut**.

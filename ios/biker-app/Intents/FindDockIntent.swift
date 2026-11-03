@@ -14,9 +14,12 @@
 //  Intents that can start guidance or a ride are LiveActivityIntents,
 //  which lets them start the Lock Screen activity from the background.
 //
-//  Siri AI Developer Preview: Siri's own model picks among these intents
-//  by their titles and descriptions and fills their parameters from the
-//  rider's words, so each parameter says what goes in it.
+//  Siri AI Developer Preview: the intents marked `@AppIntent(.tool)` are
+//  tools Siri can call without an App Shortcut phrase. Siri's own model
+//  picks among them by their titles and descriptions and fills their
+//  parameters from the rider's words, so each parameter says what goes in
+//  it. This needs the iOS 27.3 beta SDK; the tool conformance is only
+//  available from iOS 27.3, so older iPhones use the phrases as before.
 //
 
 import AppIntents
@@ -157,6 +160,7 @@ extension AppIntent {
     }
 }
 
+@AppIntent(.tool)
 struct FindDockIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Find Dock"
     static let description = IntentDescription(
@@ -179,6 +183,7 @@ struct FindDockIntent: LiveActivityIntent {
     }
 }
 
+@AppIntent(.tool)
 struct FindDockNearSavedPlaceIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Find Dock Near Saved Place"
     static let description = IntentDescription(
@@ -242,6 +247,7 @@ extension FindDockNearSavedPlaceIntent {
     }
 }
 
+@AppIntent(.tool)
 struct FindDockNearPlaceIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Find Dock Near a Place"
     static let description = IntentDescription(
@@ -270,6 +276,7 @@ struct FindDockNearPlaceIntent: LiveActivityIntent {
     }
 }
 
+@AppIntent(.tool)
 struct CheckStationIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Check Station"
     static let description = IntentDescription(
@@ -325,6 +332,7 @@ extension CheckStationIntent {
     static let whichStationHelp = "Say which station, for example, ask Dock Finder to check Mercer and Bleecker."
 }
 
+@AppIntent(.tool)
 struct CitywideStatusIntent: AppIntent {
     static let title: LocalizedStringResource = "Citywide Status"
     static let description = IntentDescription(
@@ -340,6 +348,7 @@ struct CitywideStatusIntent: AppIntent {
     }
 }
 
+@AppIntent(.tool)
 struct SetUsualDockIntent: AppIntent {
     static let title: LocalizedStringResource = "Set Usual Dock"
     static let description = IntentDescription(
@@ -375,6 +384,7 @@ struct SetUsualDockIntent: AppIntent {
 /// "Where are you heading?", and the answer (a saved place, landmark or
 /// address) reaches the app as plain text, so Siri can't mistake it for a
 /// Maps search.
+@AppIntent(.tool)
 struct StartRideIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Start Ride"
     static let description = IntentDescription(
@@ -415,6 +425,7 @@ struct StartRideIntent: LiveActivityIntent {
     }
 }
 
+@AppIntent(.tool)
 struct EndRideIntent: AppIntent {
     static let title: LocalizedStringResource = "End Ride"
     static let description = IntentDescription("Stops watching your current ride.")
@@ -431,6 +442,7 @@ struct EndRideIntent: AppIntent {
 /// "Hey Siri, ask Dock Finder to direct me": turn-by-turn guidance to the
 /// dock Siri just mentioned, or to the nearest dock with room. Also the
 /// fallback if a yes/no follow-up ever doesn't get through.
+@AppIntent(.tool)
 struct DirectMeIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Direct Me to a Dock"
     static let description = IntentDescription(
@@ -469,6 +481,7 @@ struct DirectMeIntent: LiveActivityIntent {
     }
 }
 
+@AppIntent(.tool)
 struct StopDirectionsIntent: AppIntent {
     static let title: LocalizedStringResource = "Stop Directions"
     static let description = IntentDescription("Stops turn-by-turn guidance to a dock.")
@@ -488,6 +501,10 @@ struct StopDirectionsIntent: AppIntent {
 /// names, then Apple Intelligence where it's available. A server is only
 /// asked if a build sets one up (none does by default). The reply follows
 /// the Directions setting like any other answer.
+///
+/// Not a Siri AI tool: Siri's own model already picks among the tools
+/// above, and offering it a catch-all would only send requests here to be
+/// read a second time.
 struct AskDockFinderIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Ask Dock Finder a Question"
     static let description = IntentDescription(
