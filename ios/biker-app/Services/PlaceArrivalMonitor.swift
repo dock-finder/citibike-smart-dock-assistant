@@ -6,11 +6,11 @@
 //  if they never started a ride. iOS watches a circle (geofence) around
 //  each saved place at its alert distance and wakes Dock Finder when the
 //  rider crosses into one, even if the app wasn't running. The app then
-//  checks that they were actually biking (not walking or on the subway),
-//  speaks the dock answer and posts it as a notification.
+//  speaks the dock answer and posts it as a notification, however the
+//  rider arrived. (A check that they were biking, not walking or on the
+//  subway, is switched off: see PlaceArrivalRules.requiresCycling.)
 //
-//  Needs Always location access. Motion & Fitness access lets it skip
-//  walking and transit; without it, every arrival alerts.
+//  Needs Always location access.
 //
 
 import CoreLocation
@@ -29,6 +29,9 @@ final class PlaceArrivalMonitor {
     /// name, which iOS doesn't allow.
     private var monitorTask: Task<CLMonitor, Never>?
     private var eventsTask: Task<Void, Never>?
+    /// Places whose arrival is being handled now, so a duplicate geofence
+    /// event for the same place can't announce it twice.
+    private var arrivalsInProgress: Set<UUID> = []
 
     /// Call at every launch, including the background relaunch iOS does
     /// for a geofence, and whenever saved places or permissions change.
@@ -82,23 +85,23 @@ final class PlaceArrivalMonitor {
     // MARK: - Arriving
 
     private func arrived(at placeID: UUID) async {
-        guard let place = SavedPlacesStore.shared.place(id: placeID) else { return }
-        // Keep running while this checks motion, fetches docks and speaks.
+        guard let place = SavedPlacesStore.shared.place(id: placeID),
+              arrivalsInProgress.insert(placeID).inserted
+        else { return }
+        defer { arrivalsInProgress.remove(placeID) }
+        // Keep running while this fetches docks and speaks.
         let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Saved place arrival")
         defer { UIApplication.shared.endBackgroundTask(backgroundTask) }
 
         let now = Date.now
-        var lastAlerts = Self.lastAlerts()
-        let shouldAlert = PlaceArrivalRules.shouldAlert(
+        let shouldAlert = await PlaceArrivalRules.shouldAlert(
             enabled: place.arrivalAlerts,
             busyWithRideOrDirections: RideTracker.shared.currentRide != nil || GuidanceSession.shared.isActive,
-            lastAlert: lastAlerts[placeID.uuidString],
-            wasCycling: await MotionCheck.wasCycling(now: now),
-            now: now
+            lastAlert: Self.lastAlerts()[placeID.uuidString],
+            now: now,
+            wasCycling: { await MotionCheck.wasCycling(now: now) }
         )
         guard shouldAlert else { return }
-        lastAlerts[placeID.uuidString] = now
-        UserDefaults.standard.set(lastAlerts, forKey: Self.lastAlertsKey)
 
         var text: String
         do {
@@ -118,12 +121,21 @@ final class PlaceArrivalMonitor {
                 GuidanceSession.shared.offer(station)
                 text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
             }
-        } catch let error as DockFinderError {
-            text = String(localized: error.localizedStringResource)
         } catch {
-            return
+            text = PlaceArrivalRules.failureMessage(for: error)
         }
         await announcer.announce(text, title: "Arriving at \(place.name)")
+        // Only now: an arrival that never got announced (the app was
+        // stopped mid-lookup, say) shouldn't silence this place for an hour.
+        Self.recordAlert(for: placeID, at: .now)
+    }
+
+    private static func recordAlert(for placeID: UUID, at date: Date) {
+        // Read again rather than reusing an earlier copy, so another
+        // place's alert recorded meanwhile isn't overwritten.
+        var lastAlerts = lastAlerts()
+        lastAlerts[placeID.uuidString] = date
+        UserDefaults.standard.set(lastAlerts, forKey: lastAlertsKey)
     }
 
     private static func lastAlerts() -> [String: Date] {
@@ -132,6 +144,7 @@ final class PlaceArrivalMonitor {
 }
 
 /// Whether the rider is on a bike, from the phone's motion coprocessor.
+/// Arrival alerts only ask when PlaceArrivalRules.requiresCycling is on.
 nonisolated enum MotionCheck {
     /// `nil` when iOS can't say: no motion hardware, or Motion & Fitness
     /// access is off.
