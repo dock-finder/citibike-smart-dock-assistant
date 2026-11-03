@@ -23,36 +23,48 @@ final class PlaceArrivalMonitor {
 
     private static let monitorName = "DockFinderSavedPlaces"
     private static let lastAlertsKey = "placeArrivalLastAlerts"
+    /// Per place, when failed lookups were spoken in the last hour. Saved,
+    /// because each arrival may be a fresh background launch.
+    private static let spokenFailuresKey = "placeArrivalSpokenFailures"
 
     private let defaults: UserDefaults
+    private let now: @MainActor () -> Date
     private let isBusy: @MainActor () -> Bool
+    private let wasCycling: @Sendable (Date) async -> Bool?
     private let lookUp: @MainActor (SavedPlace) async throws -> String
     private let announce: @MainActor (_ text: String, _ title: String) async -> Void
+    private let notifyQuietly: @MainActor (_ text: String, _ title: String) async -> Void
+    private let log: @MainActor (_ event: String, _ details: [String: String]) -> Void
     /// Shared so concurrent syncs never create two monitors with the same
     /// name, which iOS doesn't allow.
     private var monitorTask: Task<CLMonitor, Never>?
     private var eventsTask: Task<Void, Never>?
-    /// Places whose arrival is being handled now, so a duplicate geofence
-    /// event for the same place can't announce it twice.
+    /// Places whose arrival is being handled now. iOS's events are handled
+    /// one at a time, so this only matters if handleArrival is ever called
+    /// from somewhere else too.
     private var arrivalsInProgress: Set<UUID> = []
 
-    /// The parameters are for tests; the app uses the real ride, dock
-    /// lookup and voice.
+    /// The parameters are for tests; the app uses the real clock, ride,
+    /// motion, dock lookup, voice and metrics.
     init(
         defaults: UserDefaults = .standard,
+        now: (@MainActor () -> Date)? = nil,
         isBusy: (@MainActor () -> Bool)? = nil,
+        wasCycling: (@Sendable (Date) async -> Bool?)? = nil,
         lookUp: (@MainActor (SavedPlace) async throws -> String)? = nil,
-        announce: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil
+        announce: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil,
+        notifyQuietly: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil,
+        log: (@MainActor (_ event: String, _ details: [String: String]) -> Void)? = nil
     ) {
         self.defaults = defaults
+        self.now = now ?? { .now }
         self.isBusy = isBusy ?? { RideTracker.shared.currentRide != nil || GuidanceSession.shared.isActive }
+        self.wasCycling = wasCycling ?? { await MotionCheck.wasCycling(now: $0) }
         self.lookUp = lookUp ?? { try await Self.liveAnswer(for: $0) }
-        if let announce {
-            self.announce = announce
-        } else {
-            let announcer = Announcer()
-            self.announce = { await announcer.announce($0, title: $1) }
-        }
+        self.log = log ?? { Metrics.shared.log($0, details: $1) }
+        let announcer = announce == nil || notifyQuietly == nil ? Announcer() : nil
+        self.announce = announce ?? { await announcer?.announce($0, title: $1) }
+        self.notifyQuietly = notifyQuietly ?? { await announcer?.notifyQuietly($0, title: $1) }
     }
 
     /// Call at every launch, including the background relaunch iOS does
@@ -72,12 +84,14 @@ final class PlaceArrivalMonitor {
                PlaceArrivalRules.geofenceIsCurrent(center: existing.center, radius: existing.radius, for: place) {
                 continue
             }
-            // A new or moved place, or a new radius. Assume "outside" so
-            // arriving triggers it.
+            // A new or moved place, a new radius, or the alert just turned
+            // on. Starts "outside" so arriving triggers it, unless the
+            // rider is standing in the circle right now.
+            let inside = PlaceArrivalRules.startsInside(place, lastFix: LocationService.shared.lastKnownLocation, now: now())
             await monitor.add(
                 CLMonitor.CircularGeographicCondition(center: place.location.coordinate, radius: place.alertDistance),
                 identifier: identifier,
-                assuming: .unsatisfied
+                assuming: inside ? .satisfied : .unsatisfied
             )
         }
     }
@@ -116,20 +130,21 @@ final class PlaceArrivalMonitor {
 
     /// Alerts for an arrival at `place` if the rules allow it. Only a dock
     /// answer (including "No docks with space near…") starts the place's
-    /// hour-long cooldown. A failed lookup is spoken but not counted, so
-    /// the next arrival tries again: a repeat beats a missed answer.
+    /// hour-long cooldown. A failed lookup doesn't, so the next arrival
+    /// tries again (a repeat beats a missed answer); see reportFailure for
+    /// when a failure is spoken.
     func handleArrival(at place: SavedPlace) async {
-        // A duplicate event while this place is already being handled.
         guard arrivalsInProgress.insert(place.id).inserted else { return }
         defer { arrivalsInProgress.remove(place.id) }
 
-        let now = Date.now
+        let now = self.now()
+        let cycling = self.wasCycling
         let shouldAlert = await PlaceArrivalRules.shouldAlert(
             enabled: place.arrivalAlerts,
             busyWithRideOrDirections: isBusy(),
             lastAlert: lastAlert(for: place.id),
             now: now,
-            wasCycling: { await MotionCheck.wasCycling(now: now) }
+            wasCycling: { await cycling(now) }
         )
         guard shouldAlert else { return }
 
@@ -138,13 +153,36 @@ final class PlaceArrivalMonitor {
         do {
             text = try await lookUp(place)
         } catch {
-            await announce(PlaceArrivalRules.failureMessage(for: error), title)
+            await reportFailure(error, at: place, title: title)
             return
         }
         await announce(text, title)
         // Only once the answer was given, so an arrival cut off mid-lookup
         // doesn't silence the place either.
-        recordAlert(for: place.id, at: .now)
+        recordAlert(for: place.id, at: self.now())
+        setSpokenFailures([], for: place.id)
+    }
+
+    /// Speaks why the lookup failed, unless one was spoken for this place
+    /// in the last few minutes or three already were this hour: then it's
+    /// only posted as a quiet notification. Either way the place stays
+    /// ready to alert again, and the failure is logged.
+    private func reportFailure(_ error: any Error, at place: SavedPlace, title: String) async {
+        let now = self.now()
+        let earlier = spokenFailures(for: place.id)
+        let speaks = PlaceArrivalRules.speaksFailure(spokenFailures: earlier, now: now)
+        var details = Metrics.errorDetails(error)
+        details["place_id"] = place.id.uuidString
+        details["spoken"] = speaks ? "yes" : "no"
+        log("place_arrival_failed", details)
+
+        let text = PlaceArrivalRules.failureMessage(for: error)
+        guard speaks else {
+            await notifyQuietly(text, title)
+            return
+        }
+        await announce(text, title)
+        setSpokenFailures(earlier + [now], for: place.id)
     }
 
     /// The dock answer for `place`, logged and offered for directions.
@@ -173,9 +211,23 @@ final class PlaceArrivalMonitor {
         lastAlerts()[placeID.uuidString]
     }
 
+    /// When failed lookups for the place were spoken in the last hour.
+    func spokenFailures(for placeID: UUID) -> [Date] {
+        let all = defaults.dictionary(forKey: Self.spokenFailuresKey) as? [String: [Date]] ?? [:]
+        return all[placeID.uuidString] ?? []
+    }
+
+    private func setSpokenFailures(_ dates: [Date], for placeID: UUID) {
+        // Read again rather than reusing an earlier copy, so other places'
+        // entries recorded meanwhile aren't overwritten.
+        var all = defaults.dictionary(forKey: Self.spokenFailuresKey) as? [String: [Date]] ?? [:]
+        let now = self.now()
+        let recent = dates.filter { now.timeIntervalSince($0) < PlaceArrivalRules.cooldown }
+        all[placeID.uuidString] = recent.isEmpty ? nil : recent
+        defaults.set(all, forKey: Self.spokenFailuresKey)
+    }
+
     private func recordAlert(for placeID: UUID, at date: Date) {
-        // Read again rather than reusing an earlier copy, so another
-        // place's alert recorded meanwhile isn't overwritten.
         var lastAlerts = lastAlerts()
         lastAlerts[placeID.uuidString] = date
         defaults.set(lastAlerts, forKey: Self.lastAlertsKey)

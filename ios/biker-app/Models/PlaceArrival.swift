@@ -26,6 +26,16 @@ nonisolated enum PlaceArrivalRules {
     /// Cycling that started this recently counts even if iOS has already
     /// switched to "walking" (it lags behind getting off the bike).
     static let recentCyclingWindow: TimeInterval = 5 * 60
+    /// A failed lookup doesn't start the cooldown, so after one is spoken,
+    /// more failures at that place stay quiet this long (a dead zone, or
+    /// wobbling at the circle's edge). An answer is still spoken.
+    static let failureQuietPeriod: TimeInterval = 3 * 60
+    /// And at most this many are spoken per place in an hour (a long Citi
+    /// Bike outage).
+    static let maxSpokenFailuresPerHour = 3
+    /// A location fix this recent decides whether the rider is already
+    /// inside a geofence that's being added.
+    static let insideCheckMaxAge: TimeInterval = 2 * 60
 
     /// One reading from the phone's motion coprocessor.
     nonisolated struct ActivitySample: Sendable, Equatable {
@@ -66,6 +76,28 @@ nonisolated enum PlaceArrivalRules {
         if let lastAlert, now.timeIntervalSince(lastAlert) < cooldown { return false }
         guard requiresCycling else { return true }
         return await wasCycling() != false
+    }
+
+    /// Whether a failed lookup is spoken, given when this place's failures
+    /// were spoken before. Not within `failureQuietPeriod` of the last one,
+    /// and not more than `maxSpokenFailuresPerHour` in an hour.
+    static func speaksFailure(spokenFailures: [Date], now: Date) -> Bool {
+        let lastHour = spokenFailures.filter { now.timeIntervalSince($0) < cooldown }
+        if let last = lastHour.max(), now.timeIntervalSince(last) < failureQuietPeriod { return false }
+        return lastHour.count < maxSpokenFailuresPerHour
+    }
+
+    /// Whether a geofence being added for `place` should start out as
+    /// "inside": a fix from the last couple of minutes puts the rider in
+    /// the circle. Then saving, moving or enlarging a place, or turning its
+    /// alert on, while standing there doesn't alert straight away; leaving
+    /// and coming back does. With no recent fix it starts "outside", so the
+    /// next time iOS sees the rider inside, it alerts.
+    static func startsInside(_ place: SavedPlace, lastFix: CLLocation?, now: Date) -> Bool {
+        guard let lastFix, lastFix.horizontalAccuracy >= 0,
+              now.timeIntervalSince(lastFix.timestamp) <= insideCheckMaxAge
+        else { return false }
+        return lastFix.distance(from: place.location) <= place.alertDistance
     }
 
     /// What to say when the dock lookup fails, so an arrival is never

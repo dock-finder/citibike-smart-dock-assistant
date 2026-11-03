@@ -54,6 +54,12 @@ final class Announcer {
         await postNotification(text, title: title, identifier: notificationID, quietly: spoken)
     }
 
+    /// Posts `text` as a notification without speaking it or making a
+    /// sound, for news that doesn't need to interrupt.
+    func notifyQuietly(_ text: String, title: String, notificationID: String = arrivalNotificationID) async {
+        await postNotification(text, title: title, identifier: notificationID, quietly: true)
+    }
+
     /// Speaks an answer the rider just asked for (the Action Button). The
     /// notification is only a fallback here, posted if audio can't start,
     /// so AirPods with Announce Notifications on don't say it twice.
