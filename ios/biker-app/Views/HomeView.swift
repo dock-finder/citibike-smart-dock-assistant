@@ -70,6 +70,11 @@ struct HomeView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.tint)
                         }
+                        if savedPlaces.places.contains(where: \.arrivalAlerts) {
+                            AlwaysLocationNotice(message: AlwaysLocationNotice.arrivalAlertsMessage)
+                                // The card's plain style would hide that the button is one.
+                                .buttonStyle(.borderless)
+                        }
                     }
 
                     HomeCard(title: "More") {
@@ -139,7 +144,8 @@ struct HomeView: View {
         }
         .task {
             // For riders who finished onboarding before arrival alerts
-            // existed. iOS only ever shows this once.
+            // existed. iOS only ever shows this once. Arrival alerts only
+            // use it while PlaceArrivalRules.requiresCycling is on.
             await MotionCheck.requestPermission()
             // Arrival alerts also arrive as notifications. Asked here, on
             // screen, since a ride started with Siri can't show the prompt.

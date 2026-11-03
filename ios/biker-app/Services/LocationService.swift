@@ -23,6 +23,7 @@ nonisolated protocol LocationProviding: Sendable {
 }
 
 @MainActor
+@Observable
 final class LocationService: NSObject, LocationProviding {
     static let shared = LocationService()
     /// Set once the "Change to Always Allow" prompt has been asked for.
@@ -37,19 +38,31 @@ final class LocationService: NSObject, LocationProviding {
     /// coming from when choosing a dock.
     private static let maxRecentLocationAge: TimeInterval = 5 * 60
 
-    private let manager = CLLocationManager()
-    private var authorizationContinuations: [CheckedContinuation<CLAuthorizationStatus, Never>] = []
-    private var locationContinuations: [CheckedContinuation<CLLocation, Error>] = []
-    private var timeoutTask: Task<Void, Never>?
+    @ObservationIgnored private let manager = CLLocationManager()
+    @ObservationIgnored private var authorizationContinuations: [CheckedContinuation<CLAuthorizationStatus, Never>] = []
+    @ObservationIgnored private var locationContinuations: [CheckedContinuation<CLLocation, Error>] = []
+    @ObservationIgnored private var timeoutTask: Task<Void, Never>?
+    /// The status as of iOS's last report. Observed: views that read
+    /// `authorizationStatus` update when it changes.
+    private var knownAuthorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// Whether the one-time "Change to Always Allow" prompt has been used.
+    /// Observed, so every Always notice switches to Open Settings at once.
+    private(set) var hasAskedForAlways = UserDefaults.standard.bool(forKey: LocationService.alwaysPromptShownKey)
 
     override init() {
         super.init()
+        knownAuthorizationStatus = manager.authorizationStatus
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
     }
 
+    /// Always the manager's current answer. Reading it from a view also
+    /// subscribes the view to changes (through `knownAuthorizationStatus`),
+    /// so notices update as soon as the rider answers a prompt or comes
+    /// back from Settings.
     var authorizationStatus: CLAuthorizationStatus {
-        manager.authorizationStatus
+        _ = knownAuthorizationStatus
+        return manager.authorizationStatus
     }
 
     /// The latest location iOS already has, without asking for a new one.
@@ -76,6 +89,7 @@ final class LocationService: NSObject, LocationProviding {
     /// to change it in Settings.
     func requestAlwaysAuthorization() {
         UserDefaults.standard.set(true, forKey: Self.alwaysPromptShownKey)
+        hasAskedForAlways = true
         manager.requestAlwaysAuthorization()
     }
 
@@ -159,6 +173,14 @@ extension LocationService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         MainActor.assumeIsolated {
             let status = manager.authorizationStatus
+            let previous = knownAuthorizationStatus
+            knownAuthorizationStatus = status
+            if status == .authorizedAlways, previous != .authorizedAlways {
+                // Arrival geofences only work with Always. Re-adding them
+                // here covers Always being granted (in the prompt or in
+                // Settings) after launch, not just at the next launch.
+                Task { await PlaceArrivalMonitor.shared.sync() }
+            }
             guard status != .notDetermined else { return }
             let continuations = authorizationContinuations
             authorizationContinuations.removeAll()
