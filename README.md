@@ -41,7 +41,7 @@ Arrive at a saved place (school, work, home) and Dock Finder tells you where to 
 > "Your usual dock is full. Go to Washington and Greene, 8 docks, 350 feet from school. For directions, say: Hey Siri, ask Dock Finder to direct me."
 
 - It speaks up on **every arrival**, however you get there: biking, walking, driving or the subway. We'd rather it speak up when you didn't need it than stay quiet when you did.
-- At most once an hour per place, and not while a ride or directions are already running. If it can't get an answer (no signal, say), it tells you why instead, and that counts as the alert for the hour.
+- At most once an hour per place, and not while a ride or directions are already running. If it can't get an answer (no signal, say), it tells you why instead, and that doesn't count: arriving again tries again. A real answer, even "No docks with space near school", does count.
 - Triggers at each place's alert radius (the circle on its map, see Saved Places below), and needs location access set to **Always**. Without it, the screen of each place with the alert on, and the home screen's Saved Places card, say so, with a button to allow it.
 - A check that only lets it speak up when you're biking (using the iPhone's motion sensor and **Motion & Fitness**) is still in the app but switched off. The app still asks for Motion & Fitness so the check can be switched back on.
 - Turn it off per place with **Alert Me When I Arrive** on the place's screen.

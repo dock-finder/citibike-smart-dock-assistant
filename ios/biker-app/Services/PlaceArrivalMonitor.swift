@@ -24,7 +24,10 @@ final class PlaceArrivalMonitor {
     private static let monitorName = "DockFinderSavedPlaces"
     private static let lastAlertsKey = "placeArrivalLastAlerts"
 
-    private let announcer = Announcer()
+    private let defaults: UserDefaults
+    private let isBusy: @MainActor () -> Bool
+    private let lookUp: @MainActor (SavedPlace) async throws -> String
+    private let announce: @MainActor (_ text: String, _ title: String) async -> Void
     /// Shared so concurrent syncs never create two monitors with the same
     /// name, which iOS doesn't allow.
     private var monitorTask: Task<CLMonitor, Never>?
@@ -32,6 +35,25 @@ final class PlaceArrivalMonitor {
     /// Places whose arrival is being handled now, so a duplicate geofence
     /// event for the same place can't announce it twice.
     private var arrivalsInProgress: Set<UUID> = []
+
+    /// The parameters are for tests; the app uses the real ride, dock
+    /// lookup and voice.
+    init(
+        defaults: UserDefaults = .standard,
+        isBusy: (@MainActor () -> Bool)? = nil,
+        lookUp: (@MainActor (SavedPlace) async throws -> String)? = nil,
+        announce: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil
+    ) {
+        self.defaults = defaults
+        self.isBusy = isBusy ?? { RideTracker.shared.currentRide != nil || GuidanceSession.shared.isActive }
+        self.lookUp = lookUp ?? { try await Self.liveAnswer(for: $0) }
+        if let announce {
+            self.announce = announce
+        } else {
+            let announcer = Announcer()
+            self.announce = { await announcer.announce($0, title: $1) }
+        }
+    }
 
     /// Call at every launch, including the background relaunch iOS does
     /// for a geofence, and whenever saved places or permissions change.
@@ -85,61 +107,82 @@ final class PlaceArrivalMonitor {
     // MARK: - Arriving
 
     private func arrived(at placeID: UUID) async {
-        guard let place = SavedPlacesStore.shared.place(id: placeID),
-              arrivalsInProgress.insert(placeID).inserted
-        else { return }
-        defer { arrivalsInProgress.remove(placeID) }
+        guard let place = SavedPlacesStore.shared.place(id: placeID) else { return }
         // Keep running while this fetches docks and speaks.
         let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Saved place arrival")
         defer { UIApplication.shared.endBackgroundTask(backgroundTask) }
+        await handleArrival(at: place)
+    }
+
+    /// Alerts for an arrival at `place` if the rules allow it. Only a dock
+    /// answer (including "No docks with space near…") starts the place's
+    /// hour-long cooldown. A failed lookup is spoken but not counted, so
+    /// the next arrival tries again: a repeat beats a missed answer.
+    func handleArrival(at place: SavedPlace) async {
+        // A duplicate event while this place is already being handled.
+        guard arrivalsInProgress.insert(place.id).inserted else { return }
+        defer { arrivalsInProgress.remove(place.id) }
 
         let now = Date.now
         let shouldAlert = await PlaceArrivalRules.shouldAlert(
             enabled: place.arrivalAlerts,
-            busyWithRideOrDirections: RideTracker.shared.currentRide != nil || GuidanceSession.shared.isActive,
-            lastAlert: Self.lastAlerts()[placeID.uuidString],
+            busyWithRideOrDirections: isBusy(),
+            lastAlert: lastAlert(for: place.id),
             now: now,
             wasCycling: { await MotionCheck.wasCycling(now: now) }
         )
         guard shouldAlert else { return }
 
-        var text: String
+        let title = "Arriving at \(place.name)"
+        let text: String
         do {
-            let answer = try await DockFinderService.live.findDock(for: place).answer
-            text = answer.text
-            let here = LocationService.shared.lastKnownLocation
-            Metrics.shared.log(
-                "place_arrival_alert",
-                station: answer.station?.name,
-                avoidedStation: answer.avoided?.name,
-                location: here,
-                details: ["place": place.name, "answer": answer.text]
-            )
-            SavingsStore.shared.record(answer, from: here, context: "place_arrival")
-            SavingsStore.shared.recordHandsFree(context: "place_arrival")
-            if let station = answer.station {
-                GuidanceSession.shared.offer(station)
-                text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
-            }
+            text = try await lookUp(place)
         } catch {
-            text = PlaceArrivalRules.failureMessage(for: error)
+            await announce(PlaceArrivalRules.failureMessage(for: error), title)
+            return
         }
-        await announcer.announce(text, title: "Arriving at \(place.name)")
-        // Only now: an arrival that never got announced (the app was
-        // stopped mid-lookup, say) shouldn't silence this place for an hour.
-        Self.recordAlert(for: placeID, at: .now)
+        await announce(text, title)
+        // Only once the answer was given, so an arrival cut off mid-lookup
+        // doesn't silence the place either.
+        recordAlert(for: place.id, at: .now)
     }
 
-    private static func recordAlert(for placeID: UUID, at date: Date) {
+    /// The dock answer for `place`, logged and offered for directions.
+    private static func liveAnswer(for place: SavedPlace) async throws -> String {
+        let answer = try await DockFinderService.live.findDock(for: place).answer
+        var text = answer.text
+        let here = LocationService.shared.lastKnownLocation
+        Metrics.shared.log(
+            "place_arrival_alert",
+            station: answer.station?.name,
+            avoidedStation: answer.avoided?.name,
+            location: here,
+            details: ["place": place.name, "answer": answer.text]
+        )
+        SavingsStore.shared.record(answer, from: here, context: "place_arrival")
+        SavingsStore.shared.recordHandsFree(context: "place_arrival")
+        if let station = answer.station {
+            GuidanceSession.shared.offer(station)
+            text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
+        }
+        return text
+    }
+
+    /// When the place last got a dock answer (its cooldown's start), if ever.
+    func lastAlert(for placeID: UUID) -> Date? {
+        lastAlerts()[placeID.uuidString]
+    }
+
+    private func recordAlert(for placeID: UUID, at date: Date) {
         // Read again rather than reusing an earlier copy, so another
         // place's alert recorded meanwhile isn't overwritten.
         var lastAlerts = lastAlerts()
         lastAlerts[placeID.uuidString] = date
-        UserDefaults.standard.set(lastAlerts, forKey: lastAlertsKey)
+        defaults.set(lastAlerts, forKey: Self.lastAlertsKey)
     }
 
-    private static func lastAlerts() -> [String: Date] {
-        UserDefaults.standard.dictionary(forKey: lastAlertsKey) as? [String: Date] ?? [:]
+    private func lastAlerts() -> [String: Date] {
+        defaults.dictionary(forKey: Self.lastAlertsKey) as? [String: Date] ?? [:]
     }
 }
 

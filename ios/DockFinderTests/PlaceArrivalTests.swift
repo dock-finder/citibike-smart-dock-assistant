@@ -147,6 +147,105 @@ struct PlaceArrivalFailureMessageTests {
     }
 }
 
+/// One arrival, start to finish, with the lookup and the voice faked:
+/// only a dock answer starts the hour-long cooldown.
+@MainActor
+struct PlaceArrivalCooldownTests {
+    private let place = SavedPlace(name: "School", latitude: 40.7290, longitude: -73.9965)
+    private let defaults = UserDefaults(suiteName: "PlaceArrivalCooldownTests-\(UUID())")!
+
+    private final class Spoken {
+        var lines: [String] = []
+    }
+
+    private func monitor(_ spoken: Spoken, lookUp: @escaping @MainActor (SavedPlace) async throws -> String) -> PlaceArrivalMonitor {
+        PlaceArrivalMonitor(defaults: defaults, isBusy: { false }, lookUp: lookUp, announce: { text, _ in spoken.lines.append(text) })
+    }
+
+    @Test(arguments: [DockFinderError.networkUnavailable, .locationUnavailable, .serviceUnavailable(statusCode: 503)])
+    func aFailedLookupIsSpokenButDoesntStartTheCooldown(error: DockFinderError) async {
+        let spoken = Spoken()
+        let monitor = monitor(spoken) { _ in throw error }
+        await monitor.handleArrival(at: place)
+        #expect(spoken.lines == [String(localized: error.localizedStringResource)])
+        #expect(monitor.lastAlert(for: place.id) == nil)
+
+        // Arriving again straight away tries again.
+        await monitor.handleArrival(at: place)
+        #expect(spoken.lines.count == 2)
+    }
+
+    @Test func anUnexpectedFailureIsSpokenToo() async {
+        let spoken = Spoken()
+        let monitor = monitor(spoken) { _ in throw CancellationError() }
+        await monitor.handleArrival(at: place)
+        #expect(spoken.lines == [String(localized: DockFinderError.networkUnavailable.localizedStringResource)])
+        #expect(monitor.lastAlert(for: place.id) == nil)
+    }
+
+    @Test(arguments: ["Your usual dock has 8 docks open.", "No docks with space near School."])
+    func aDockAnswerStartsTheCooldown(answer: String) async {
+        let spoken = Spoken()
+        let monitor = monitor(spoken) { _ in answer }
+        await monitor.handleArrival(at: place)
+        #expect(spoken.lines == [answer])
+        #expect(monitor.lastAlert(for: place.id) != nil)
+
+        // Arriving again within the hour stays quiet.
+        await monitor.handleArrival(at: place)
+        #expect(spoken.lines == [answer])
+    }
+
+    @Test func anAnswerAfterAFailureStartsTheCooldown() async {
+        let spoken = Spoken()
+        var failsNext = true
+        let monitor = monitor(spoken) { _ in
+            if failsNext {
+                failsNext = false
+                throw DockFinderError.networkUnavailable
+            }
+            return "Your usual dock has 8 docks open."
+        }
+        for _ in 0..<3 {
+            await monitor.handleArrival(at: place)
+        }
+        #expect(spoken.lines == [
+            String(localized: DockFinderError.networkUnavailable.localizedStringResource),
+            "Your usual dock has 8 docks open.",
+        ])
+    }
+
+    @Test func aDuplicateEventDuringAnArrivalIsDropped() async {
+        let spoken = Spoken()
+        var lookups = 0
+        var release: CheckedContinuation<Void, Never>?
+        let monitor = monitor(spoken) { _ in
+            lookups += 1
+            await withCheckedContinuation { release = $0 }
+            return "Your usual dock has 8 docks open."
+        }
+        let first = Task { await monitor.handleArrival(at: place) }
+        while release == nil { await Task.yield() }
+
+        await monitor.handleArrival(at: place)
+        #expect(lookups == 1)
+
+        release?.resume()
+        await first.value
+        #expect(spoken.lines == ["Your usual dock has 8 docks open."])
+    }
+
+    @Test func otherPlacesKeepTheirCooldown() async {
+        let spoken = Spoken()
+        let gym = SavedPlace(name: "Gym", latitude: 40.74, longitude: -73.99)
+        let monitor = monitor(spoken) { _ in "Your usual dock has 8 docks open." }
+        await monitor.handleArrival(at: place)
+        await monitor.handleArrival(at: gym)
+        #expect(monitor.lastAlert(for: place.id) != nil)
+        #expect(monitor.lastAlert(for: gym.id) != nil)
+    }
+}
+
 struct SavedPlaceArrivalSettingTests {
     @Test func placesSavedBeforeThisSettingAlertByDefault() throws {
         let place = SavedPlace(name: "School", latitude: 40.7290, longitude: -73.9965)
