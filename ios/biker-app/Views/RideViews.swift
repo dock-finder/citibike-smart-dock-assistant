@@ -98,9 +98,12 @@ struct AlwaysLocationNotice: View {
 
     var message: LocalizedStringKey = "Rides need Always location access to alert you with your phone locked."
 
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    @State private var status = LocationService.shared.authorizationStatus
+
+    /// Both observed, so every notice goes away (or changes its button)
+    /// as soon as iOS reports a new answer or the prompt has been used.
+    private var status: CLAuthorizationStatus { LocationService.shared.authorizationStatus }
+    private var askedForAlways: Bool { LocationService.shared.hasAskedForAlways }
 
     var body: some View {
         Group {
@@ -115,14 +118,11 @@ struct AlwaysLocationNotice: View {
                 }
             }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { status = LocationService.shared.authorizationStatus }
-        }
     }
 
     /// iOS only shows the upgrade prompt once; after that, Settings is the only way.
     private var canPrompt: Bool {
-        status == .authorizedWhenInUse && !UserDefaults.standard.bool(forKey: LocationService.alwaysPromptShownKey)
+        status == .authorizedWhenInUse && !askedForAlways
             || status == .notDetermined
     }
 
@@ -137,7 +137,6 @@ struct AlwaysLocationNotice: View {
                     _ = await LocationService.shared.requestWhenInUseAuthorization()
                 }
                 LocationService.shared.requestAlwaysAuthorization()
-                status = LocationService.shared.authorizationStatus
             }
         } else if let url = URL(string: UIApplication.openSettingsURLString) {
             openURL(url)
