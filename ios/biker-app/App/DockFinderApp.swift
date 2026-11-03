@@ -46,6 +46,8 @@ struct DockFinderApp: App {
             // For the team's Users tab: last opened, and how often riders come back.
             if phase == .active {
                 Metrics.shared.logOpened()
+                // So Siri can find any station by name (at most once a day).
+                Task { await StationSpotlightIndex.refreshIfNeeded() }
             }
         }
     }

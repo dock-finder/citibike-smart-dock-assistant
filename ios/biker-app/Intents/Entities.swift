@@ -6,9 +6,14 @@
 //  fill in: "Ask Dock Finder to find a dock near school", "…to check
 //  Mercer and Bleecker".
 //
+//  With the Siri AI Developer Preview, Siri also looks these up on its own
+//  while it works out a request: saved places from `allEntities()`, and
+//  stations from Spotlight (see `StationSpotlightIndex`).
+//
 
 import AppIntents
 import CoreLocation
+import CoreSpotlight
 import Foundation
 
 struct SavedPlaceEntity: AppEntity {
@@ -38,7 +43,9 @@ struct SavedPlaceEntity: AppEntity {
     }
 }
 
-struct SavedPlaceQuery: EntityStringQuery {
+/// Enumerable as well, so Siri can read every saved place (there are only
+/// a handful) when it decides which one a request means.
+struct SavedPlaceQuery: EntityStringQuery, EnumerableEntityQuery {
     @MainActor
     func entities(for identifiers: [UUID]) async throws -> [SavedPlaceEntity] {
         SavedPlacesStore.shared.places
@@ -56,6 +63,11 @@ struct SavedPlaceQuery: EntityStringQuery {
     /// Also the list Siri matches against in "Find a dock near school".
     @MainActor
     func suggestedEntities() async throws -> [SavedPlaceEntity] {
+        SavedPlacesStore.shared.places.map(SavedPlaceEntity.init)
+    }
+
+    @MainActor
+    func allEntities() async throws -> [SavedPlaceEntity] {
         SavedPlacesStore.shared.places.map(SavedPlaceEntity.init)
     }
 }
@@ -84,6 +96,18 @@ struct StationEntity: AppEntity {
             title: "\(name)",
             synonyms: spoken == name ? [] : [LocalizedStringResource(stringLiteral: spoken)]
         )
+    }
+}
+
+/// In Spotlight, so Siri can find any station by name, not only the ones
+/// in `StationQuery.suggestedEntities()`. The spoken name is a keyword, so
+/// "Mercer and Bleecker" finds "Mercer St & Bleecker St".
+extension StationEntity: IndexedEntity {
+    var attributeSet: CSSearchableItemAttributeSet {
+        let attributes = defaultAttributeSet
+        let spoken = Speech.stationName(name)
+        attributes.keywords = spoken == name ? ["Citi Bike"] : ["Citi Bike", spoken]
+        return attributes
     }
 }
 

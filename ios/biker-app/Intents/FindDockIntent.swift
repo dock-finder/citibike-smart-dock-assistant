@@ -14,6 +14,10 @@
 //  Intents that can start guidance or a ride are LiveActivityIntents,
 //  which lets them start the Lock Screen activity from the background.
 //
+//  Siri AI Developer Preview: Siri's own model picks among these intents
+//  by their titles and descriptions and fills their parameters from the
+//  rider's words, so each parameter says what goes in it.
+//
 
 import AppIntents
 import CoreLocation
@@ -185,13 +189,13 @@ struct FindDockNearSavedPlaceIntent: LiveActivityIntent {
     /// Optional on purpose. With a required saved-place parameter, Siri
     /// re-asks "Which place?" forever whenever it can't match the answer to
     /// a saved place (or there are none). The app answers instead.
-    @Parameter(title: "Place")
+    @Parameter(title: "Place", description: "One of the rider's saved places, such as home, work or school.")
     var place: SavedPlaceEntity?
 
     /// Asked for, once, when Siri ran the phrase without catching which
     /// place was meant. Plain text, matched by the app, so whatever the
     /// rider says is accepted and nothing is re-asked.
-    @Parameter(title: "Place Name")
+    @Parameter(title: "Place Name", description: "The saved place's name as the rider said it, when it isn't one of the listed places.")
     var placeName: String?
 
     static var parameterSummary: some ParameterSummary {
@@ -245,7 +249,11 @@ struct FindDockNearPlaceIntent: LiveActivityIntent {
     )
     static let supportedModes: IntentModes = .background
 
-    @Parameter(title: "Place", requestValueDialog: "Where are you headed?")
+    @Parameter(
+        title: "Place",
+        description: "An address, landmark, business or neighborhood in New York City, such as Union Square or 44 West 4th Street.",
+        requestValueDialog: "Where are you headed?"
+    )
     var place: String
 
     static var parameterSummary: some ParameterSummary {
@@ -272,13 +280,13 @@ struct CheckStationIntent: LiveActivityIntent {
     /// Filled straight from the phrase ("…check Mercer and Bleecker") for
     /// the stations Siri knows about (see `StationQuery.suggestedEntities`).
     /// Optional, so Siri never re-asks when it can't match a station.
-    @Parameter(title: "Station")
+    @Parameter(title: "Station", description: "The Citi Bike station to check.")
     var station: StationEntity?
 
     /// Asked for when the phrase didn't name a station Siri knows. Plain
     /// text, so Siri accepts whatever the rider says once and the app does
     /// the fuzzy matching.
-    @Parameter(title: "Station Name")
+    @Parameter(title: "Station Name", description: "The station's name as the rider said it, such as Mercer and Bleecker, when it isn't a known station.")
     var stationName: String?
 
     static var parameterSummary: some ParameterSummary {
@@ -339,10 +347,10 @@ struct SetUsualDockIntent: AppIntent {
     )
     static let supportedModes: IntentModes = .background
 
-    @Parameter(title: "Place", requestValueDialog: "For which place?")
+    @Parameter(title: "Place", description: "The saved place this dock is for.", requestValueDialog: "For which place?")
     var place: SavedPlaceEntity
 
-    @Parameter(title: "Station", requestValueDialog: "Which station?")
+    @Parameter(title: "Station", description: "The Citi Bike station the rider normally uses there.", requestValueDialog: "Which station?")
     var station: StationEntity
 
     static var parameterSummary: some ParameterSummary {
@@ -376,10 +384,10 @@ struct StartRideIntent: LiveActivityIntent {
 
     /// Filled straight from the phrase ("…start a ride to school"). Optional,
     /// so Siri never re-asks when it can't match a saved place.
-    @Parameter(title: "Saved Place")
+    @Parameter(title: "Saved Place", description: "Where the rider is heading, when it's one of their saved places.")
     var place: SavedPlaceEntity?
 
-    @Parameter(title: "Destination")
+    @Parameter(title: "Destination", description: "Where the rider is heading, when it isn't a saved place: an address, landmark or neighborhood in New York City.")
     var destination: String?
 
     static var parameterSummary: some ParameterSummary {
@@ -432,18 +440,24 @@ struct DirectMeIntent: LiveActivityIntent {
 
     /// Filled straight from the phrase ("…direct me to school"). Optional,
     /// so Siri never re-asks when it can't match a saved place.
-    @Parameter(title: "Saved Place")
+    @Parameter(title: "Saved Place", description: "The saved place to get directions to a dock at. Leave empty for the dock just mentioned.")
     var place: SavedPlaceEntity?
+
+    /// Any other place, so Siri can ask for directions to a dock near Union
+    /// Square. No App Shortcut phrase fills it: free text can't be in one.
+    @Parameter(title: "Destination", description: "An address, landmark or neighborhood in New York City to get directions to a dock near, when it isn't a saved place.")
+    var destination: String?
 
     @MainActor
     func perform() async throws -> some SpokenAnswerResult {
         try await logged { log in
-            log.heard = place?.name
-            let request: ParsedRequest = place.map { .directionsTo($0.name) } ?? .directions
+            let named = place?.name ?? destination.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            log.heard = named
+            let request: ParsedRequest = named.map { .directionsTo($0) } ?? .directions
             // Shows in the team's sheet whether Siri passed the place along.
             Metrics.shared.log("request_understood", details: [
                 "intent": String(describing: Self.self),
-                "place": place?.name ?? "",
+                "place": named ?? "",
                 "request": String(describing: request),
             ])
             let answer = try await AssistantRouter.live().handle(request)
