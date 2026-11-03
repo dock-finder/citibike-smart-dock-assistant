@@ -100,7 +100,7 @@ struct SavedPlaceView: View {
                     }
                     .tint(.primary)
                 } footer: {
-                    Text("On a ride here, or arriving with Alert Me When I Arrive on, Dock Finder tells you where to dock as you bike into the circle. Tap the map to move the pin or change the radius.")
+                    Text("On a ride here, or arriving with Alert Me When I Arrive on, Dock Finder tells you where to dock as you enter the circle. Tap the map to move the pin or change the radius.")
                 }
 
                 Section {
@@ -114,8 +114,11 @@ struct SavedPlaceView: View {
                     )) {
                         InfoLabel(
                             "Alert Me When I Arrive",
-                            message: "When you bike within \(Speech.length(place.alertDistance)) of \(place.name), Dock Finder tells you where to dock, even if you didn't start a ride. Needs location access set to Always; walking and the subway are skipped when Motion & Fitness is allowed."
+                            message: "Whenever you get within \(Speech.length(place.alertDistance)) of \(place.name), however you got there, Dock Finder tells you where to dock, even if you didn't start a ride. At most once an hour, and not during a ride or directions. Needs location access set to Always."
                         )
+                    }
+                    if place.arrivalAlerts {
+                        AlwaysLocationNotice(message: AlwaysLocationNotice.arrivalAlertsMessage)
                     }
                 }
 
@@ -398,7 +401,7 @@ struct PlaceLocationPicker: View {
         } header: {
             Text("Where is it?")
         } footer: {
-            Text("Search or use your current location, then drag the pin or tap the map to put it exactly where you're going. On a ride here, or arriving with Alert Me When I Arrive on, Dock Finder tells you where to dock as you bike into the circle. Bigger gives you more time to change course.")
+            Text("Search or use your current location, then drag the pin or tap the map to put it exactly where you're going. On a ride here, or arriving with Alert Me When I Arrive on, Dock Finder tells you where to dock as you enter the circle. Bigger gives you more time to change course.")
         }
         .task(id: selected) { await checkDistances() }
         .task(id: pinMoves) { await lookUpAddress() }

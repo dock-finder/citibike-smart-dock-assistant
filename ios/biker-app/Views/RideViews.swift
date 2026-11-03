@@ -3,7 +3,7 @@
 //  Dock Finder
 //
 //  The home screen's ride card, the Start Ride sheet, and the notice that
-//  asks for Always location access.
+//  asks for Always location access (also shown for arrival alerts).
 //
 
 import CoreLocation
@@ -91,8 +91,12 @@ struct RideCard: View {
     }
 }
 
-/// Explains, and asks for, the Always access rides need with the phone locked.
+/// Explains, and asks for, the Always access rides need with the phone
+/// locked, and saved-place arrival alerts need at all.
 struct AlwaysLocationNotice: View {
+    static let arrivalAlertsMessage: LocalizedStringKey = "Arrival alerts need Always location access to reach you when Dock Finder isn't open."
+
+    var message: LocalizedStringKey = "Rides need Always location access to alert you with your phone locked."
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
@@ -102,7 +106,7 @@ struct AlwaysLocationNotice: View {
         Group {
             if status != .authorizedAlways {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Rides need Always location access to alert you with your phone locked.", systemImage: "location.slash")
+                    Label(message, systemImage: "location.slash")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

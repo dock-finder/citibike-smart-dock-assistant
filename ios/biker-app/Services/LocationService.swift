@@ -41,9 +41,12 @@ final class LocationService: NSObject, LocationProviding {
     private var authorizationContinuations: [CheckedContinuation<CLAuthorizationStatus, Never>] = []
     private var locationContinuations: [CheckedContinuation<CLLocation, Error>] = []
     private var timeoutTask: Task<Void, Never>?
+    /// The status as of the last change, to notice it becoming Always.
+    private var knownAuthorizationStatus: CLAuthorizationStatus = .notDetermined
 
     override init() {
         super.init()
+        knownAuthorizationStatus = manager.authorizationStatus
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
     }
@@ -159,6 +162,14 @@ extension LocationService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         MainActor.assumeIsolated {
             let status = manager.authorizationStatus
+            let previous = knownAuthorizationStatus
+            knownAuthorizationStatus = status
+            if status == .authorizedAlways, previous != .authorizedAlways {
+                // Arrival geofences only work with Always. Re-adding them
+                // here covers Always being granted (in the prompt or in
+                // Settings) after launch, not just at the next launch.
+                Task { await PlaceArrivalMonitor.shared.sync() }
+            }
             guard status != .notDetermined else { return }
             let continuations = authorizationContinuations
             authorizationContinuations.removeAll()
