@@ -10,7 +10,9 @@
 //  rider arrived. (A check that they were biking, not walking or on the
 //  subway, is switched off: see PlaceArrivalRules.requiresCycling.)
 //
-//  Needs Always location access.
+//  Needs Always location access, and a service session that says so (see
+//  updateServiceSession): without one, iOS treats the geofences as While
+//  Using and holds arrivals until the app next runs.
 //
 
 import CoreLocation
@@ -39,6 +41,8 @@ final class PlaceArrivalMonitor {
     /// name, which iOS doesn't allow.
     private var monitorTask: Task<CLMonitor, Never>?
     private var eventsTask: Task<Void, Never>?
+    /// Held while any place has arrival alerts and Always is granted.
+    private var serviceSession: CLServiceSession?
     /// Places whose arrival is being handled now. iOS's events are handled
     /// one at a time, so this only matters if handleArrival is ever called
     /// from somewhere else too.
@@ -70,8 +74,10 @@ final class PlaceArrivalMonitor {
     /// Call at every launch, including the background relaunch iOS does
     /// for a geofence, and whenever saved places or permissions change.
     func sync() async {
-        let monitor = await currentMonitor()
         let places = SavedPlacesStore.shared.places.filter(\.arrivalAlerts)
+        // First, so it's in place before any arrival is handed over.
+        updateServiceSession(watching: !places.isEmpty)
+        let monitor = await currentMonitor()
         let wanted = Set(places.map(\.id.uuidString))
 
         for identifier in await monitor.identifiers where !wanted.contains(identifier) {
@@ -96,6 +102,22 @@ final class PlaceArrivalMonitor {
         }
     }
 
+    /// Core Location treats a monitor's events as While Using unless the app
+    /// holds a session requiring Always; then it holds arrivals until the app
+    /// runs again, instead of waking it. Apple's rule is to create the session
+    /// at every launch, including background relaunches, which sync() is
+    /// called for. Only with Always granted, so it never prompts.
+    private func updateServiceSession(watching: Bool) {
+        if watching, LocationService.shared.authorizationStatus == .authorizedAlways {
+            if serviceSession == nil {
+                serviceSession = CLServiceSession(authorization: .always)
+            }
+        } else {
+            serviceSession?.invalidate()
+            serviceSession = nil
+        }
+    }
+
     private func currentMonitor() async -> CLMonitor {
         if let monitorTask { return await monitorTask.value }
         let task = Task { () -> CLMonitor in
@@ -112,7 +134,7 @@ final class PlaceArrivalMonitor {
             do {
                 for try await event in await monitor.events where event.state == .satisfied {
                     guard let id = UUID(uuidString: event.identifier) else { continue }
-                    await self?.arrived(at: id)
+                    await self?.arrived(at: id, occurredAt: event.date)
                 }
             } catch {}
         }
@@ -120,12 +142,12 @@ final class PlaceArrivalMonitor {
 
     // MARK: - Arriving
 
-    private func arrived(at placeID: UUID) async {
+    private func arrived(at placeID: UUID, occurredAt: Date) async {
         guard let place = SavedPlacesStore.shared.place(id: placeID) else { return }
         // Keep running while this fetches docks and speaks.
         let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Saved place arrival")
         defer { UIApplication.shared.endBackgroundTask(backgroundTask) }
-        await handleArrival(at: place)
+        await handleArrival(at: place, occurredAt: occurredAt)
     }
 
     /// Alerts for an arrival at `place` if the rules allow it. Only a dock
@@ -133,7 +155,10 @@ final class PlaceArrivalMonitor {
     /// hour-long cooldown. A failed lookup doesn't, so the next arrival
     /// tries again (a repeat beats a missed answer); see reportFailure for
     /// when a failure is spoken.
-    func handleArrival(at place: SavedPlace) async {
+    /// - Parameter occurredAt: When iOS saw the rider cross into the circle.
+    ///   An arrival handed over more than a few minutes after that is only
+    ///   logged (see PlaceArrivalRules.maxArrivalDelay).
+    func handleArrival(at place: SavedPlace, occurredAt: Date? = nil) async {
         guard arrivalsInProgress.insert(place.id).inserted else { return }
         defer { arrivalsInProgress.remove(place.id) }
 
@@ -147,6 +172,15 @@ final class PlaceArrivalMonitor {
             wasCycling: { await cycling(now) }
         )
         guard shouldAlert else { return }
+
+        if PlaceArrivalRules.isStale(occurredAt: occurredAt, now: now), let occurredAt {
+            // Shows in the usage sheet how often iOS woke the app too late.
+            log("place_arrival_late", [
+                "place_id": place.id.uuidString,
+                "delay_s": String(Int(now.timeIntervalSince(occurredAt))),
+            ])
+            return
+        }
 
         let title = "Arriving at \(place.name)"
         let text: String

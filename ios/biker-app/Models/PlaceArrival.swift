@@ -36,6 +36,16 @@ nonisolated enum PlaceArrivalRules {
     /// A location fix this recent decides whether the rider is already
     /// inside a geofence that's being added.
     static let insideCheckMaxAge: TimeInterval = 2 * 60
+    /// An arrival iOS hands over later than this (because the app wasn't
+    /// woken in time) isn't news any more: the rider has docked or moved on.
+    /// It's logged, not spoken, so it can't talk over a later request.
+    static let maxArrivalDelay: TimeInterval = 5 * 60
+
+    /// True when an arrival that happened at `occurredAt` is too old to speak.
+    static func isStale(occurredAt: Date?, now: Date) -> Bool {
+        guard let occurredAt else { return false }
+        return now.timeIntervalSince(occurredAt) > maxArrivalDelay
+    }
 
     /// One reading from the phone's motion coprocessor.
     nonisolated struct ActivitySample: Sendable, Equatable {

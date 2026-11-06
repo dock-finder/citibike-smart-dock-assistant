@@ -151,6 +151,13 @@ struct PlaceArrivalFailureMessageTests {
 /// When a failed lookup is spoken, and whether a new geofence starts
 /// out "inside".
 struct PlaceArrivalFailureAndGeofenceRuleTests {
+    @Test func arrivalsOlderThanFiveMinutesAreStale() {
+        #expect(!PlaceArrivalRules.isStale(occurredAt: nil, now: referenceNow))
+        #expect(!PlaceArrivalRules.isStale(occurredAt: referenceNow.addingTimeInterval(-4 * 60), now: referenceNow))
+        #expect(!PlaceArrivalRules.isStale(occurredAt: referenceNow.addingTimeInterval(-5 * 60), now: referenceNow))
+        #expect(PlaceArrivalRules.isStale(occurredAt: referenceNow.addingTimeInterval(-6 * 60), now: referenceNow))
+    }
+
     private func ago(_ minutes: Double) -> Date {
         referenceNow.addingTimeInterval(-minutes * 60)
     }
@@ -340,6 +347,39 @@ struct PlaceArrivalCooldownTests {
             #expect(entry.details["place_id"] == place.id.uuidString)
             #expect(!entry.details.values.contains(place.name))
         }
+    }
+
+    // MARK: - Late arrivals
+
+    @Test func aLateArrivalIsLoggedNotSpoken() async {
+        let world = World()
+        var lookups = 0
+        let monitor = monitor(world) { _ in lookups += 1; return Self.answer }
+        await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-40 * 60))
+        #expect(world.spoken.isEmpty)
+        #expect(world.quiet.isEmpty)
+        #expect(lookups == 0)
+        #expect(monitor.lastAlert(for: place.id) == nil, "a late arrival doesn't silence the next real one")
+        #expect(world.logged.map { $0.event } == ["place_arrival_late"])
+        #expect(world.logged.first?.details["delay_s"] == "2400")
+        #expect(world.logged.first?.details["place_id"] == place.id.uuidString)
+    }
+
+    @Test func anArrivalAFewMinutesOldIsStillSpoken() async {
+        let world = World()
+        let monitor = monitor(world) { _ in Self.answer }
+        await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-2 * 60))
+        #expect(world.spoken == [Self.answer])
+    }
+
+    @Test func aLateArrivalInTheCooldownLogsNothing() async {
+        let world = World()
+        let monitor = monitor(world) { _ in Self.answer }
+        await monitor.handleArrival(at: place)
+        world.advance(minutes: 20)
+        await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-15 * 60))
+        #expect(world.spoken == [Self.answer])
+        #expect(world.logged.isEmpty)
     }
 
     @Test func anAnswerLogsNoFailure() async {
