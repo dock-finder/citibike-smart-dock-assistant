@@ -21,9 +21,11 @@ import CoreLocation
 typealias SpokenAnswerResult = IntentResult & ReturnsValue<String> & ProvidesDialog
 
 /// Every intent result goes through here, so all of an intent's return
-/// paths have the same type. `value` is what Shortcuts receives.
+/// paths have the same type. `value` is what Shortcuts receives. The dialog
+/// is what Siri says, rewritten the way the app's own voice is
+/// (SpokenVoice.spokenText), so Siri says "ee bike", not "eh bike".
 func spokenResult(_ value: String, dialog: String? = nil) -> some SpokenAnswerResult {
-    .result(value: value, dialog: "\(dialog ?? value)")
+    .result(value: value, dialog: "\(SpokenVoice.spokenText(dialog ?? value))")
 }
 
 extension DockAnswer {
