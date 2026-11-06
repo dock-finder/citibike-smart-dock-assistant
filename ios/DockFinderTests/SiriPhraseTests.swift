@@ -14,6 +14,8 @@ import Testing
 
 struct SiriPhraseTests {
     /// The order phones already know. Append new shortcuts after these.
+    /// Find Bike replaced Citywide Status in place (same position), so no
+    /// other shortcut moved.
     static let knownOrder = [
         "StartRideIntent",
         "EndRideIntent",
@@ -21,7 +23,7 @@ struct SiriPhraseTests {
         "FindDockNearSavedPlaceIntent",
         "FindDockNearPlaceIntent",
         "CheckStationIntent",
-        "CitywideStatusIntent",
+        "FindBikeIntent",
         "DirectMeIntent",
         "StopDirectionsIntent",
         "AskDockFinderIntent",

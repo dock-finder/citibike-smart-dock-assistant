@@ -21,7 +21,8 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
     /// re-read it when the app is updated, so reordering once made "start a
     /// ride" run Find Dock. If the list ever has to change shape, also bump
     /// `CURRENT_PROJECT_VERSION` in `Config/DockFinder.xcconfig`, which makes
-    /// iOS re-read it.
+    /// iOS re-read it. To retire one, replace it in its own position, as
+    /// Find Bike replaced Citywide Status, so nothing else moves.
     ///
     /// Siri matches phrases loosely, so keep each action's wording clearly
     /// different from the others' (only Find Dock may say "find a dock"
@@ -129,15 +130,28 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
             shortTitle: "Check Station",
             systemImageName: "parkingsign.circle"
         )
+        // Took Citywide Status's place: same position, so phones that cached
+        // the old list keep every other action where they expect it.
         AppShortcut(
-            intent: CitywideStatusIntent(),
+            intent: FindBikeIntent(),
             phrases: [
-                "Ask \(.applicationName) for Citi Bike status",
-                "Ask \(.applicationName) how many bikes are out",
-                "Ask \(.applicationName) to check Citi Bike citywide",
+                "Ask \(.applicationName) for the nearest \(\.$kind)",
+                "Ask \(.applicationName) to find the nearest \(\.$kind)",
+                "Ask \(.applicationName) where the nearest \(\.$kind) is",
+                "Ask \(.applicationName) what the nearest \(\.$kind) is",
+                "Ask \(.applicationName) for a \(\.$kind)",
+                "Ask \(.applicationName) for an \(\.$kind)",
+                "Ask \(.applicationName) to find a \(\.$kind)",
+                "Ask \(.applicationName) to find an \(\.$kind)",
+                "Ask \(.applicationName) to find me a \(\.$kind)",
+                "Ask \(.applicationName) to find me an \(\.$kind)",
+                "Ask \(.applicationName) where I can get a \(\.$kind)",
+                "Ask \(.applicationName) where I can get an \(\.$kind)",
+                "Ask \(.applicationName) for a bike near me",
+                "Ask \(.applicationName) for the nearest bike near me",
             ],
-            shortTitle: "Citywide Status",
-            systemImageName: "chart.bar"
+            shortTitle: "Find Bike",
+            systemImageName: "bicycle.circle"
         )
         AppShortcut(
             intent: DirectMeIntent(),

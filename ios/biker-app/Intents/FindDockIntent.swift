@@ -332,6 +332,79 @@ struct CitywideStatusIntent: AppIntent {
     }
 }
 
+/// Which bikes "the nearest …" asks for. Siri fills it from the phrase
+/// ("…for the nearest e-bike"); the synonyms cover how riders say each one.
+enum BikeKindOption: String, AppEnum {
+    case bike
+    case ebike
+    case classicBike
+    case ebikeOnlyStation
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Bike Type"
+    static let caseDisplayRepresentations: [BikeKindOption: DisplayRepresentation] = [
+        .bike: DisplayRepresentation(
+            title: "bike",
+            subtitle: nil,
+            synonyms: ["Citi Bike", "bicycle", "any bike"]
+        ),
+        .ebike: DisplayRepresentation(
+            title: "e-bike",
+            subtitle: nil,
+            synonyms: ["ebike", "e bike", "electric bike", "station with e-bikes", "station with an e-bike"]
+        ),
+        .classicBike: DisplayRepresentation(
+            title: "classic bike",
+            subtitle: nil,
+            synonyms: ["regular bike", "pedal bike", "normal bike", "station with classic bikes", "station with a classic bike"]
+        ),
+        .ebikeOnlyStation: DisplayRepresentation(
+            title: "station with only e-bikes",
+            subtitle: nil,
+            synonyms: [
+                "e-bike only station", "station that only has e-bikes", "station with just e-bikes",
+                "station with only ebikes", "station that only has ebikes",
+            ]
+        ),
+    ]
+
+    var kind: BikeKind {
+        switch self {
+        case .bike: .any
+        case .ebike: .ebike
+        case .classicBike: .classic
+        case .ebikeOnlyStation: .ebikeOnly
+        }
+    }
+}
+
+/// "Ask Dock Finder for the nearest e-bike": the nearest station with a
+/// bike to ride away on. Took Citywide Status's place among the App
+/// Shortcuts; citywide totals still work through Ask a Question.
+struct FindBikeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Find Bike"
+    static let description = IntentDescription(
+        "Finds the nearest Citi Bike station with a bike to ride: any bike, an e-bike, a classic bike, or a station with only e-bikes."
+    )
+    static let supportedModes: IntentModes = .background
+
+    /// Optional, so Siri never asks: no type means any bike.
+    @Parameter(title: "Bike Type", description: "Which bikes the rider wants: any bike, an e-bike, a classic bike, or a station with only e-bikes.")
+    var kind: BikeKindOption?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Find the nearest \(\.$kind)")
+    }
+
+    @MainActor
+    func perform() async throws -> some SpokenAnswerResult {
+        try await logged { log in
+            let kind = self.kind?.kind ?? .any
+            log.heard = kind.rawValue
+            return spoken(try await DockFinderService.live.findNearestBike(kind).answer, log: log)
+        }
+    }
+}
+
 struct SetUsualDockIntent: AppIntent {
     static let title: LocalizedStringResource = "Set Usual Dock"
     static let description = IntentDescription(

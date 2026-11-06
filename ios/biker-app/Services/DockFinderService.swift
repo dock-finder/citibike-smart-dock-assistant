@@ -58,6 +58,13 @@ nonisolated struct DockFinderService: Sendable {
         )
     }
 
+    /// Finds the nearest station with the bikes the rider wants to ride away on.
+    func findNearestBike(_ kind: BikeKind) async throws -> BikeSearchResult {
+        let fix = try await location.currentLocation()
+        let network = try await loadNetwork()
+        return try Self.nearestBike(kind, to: fix.location, in: network, locationIsApproximate: fix.isApproximate)
+    }
+
     /// Finds a dock near a destination. If the rider has a usual dock there,
     /// it's preferred while it has room; then their backup dock; otherwise
     /// the answer says why and reroutes to the closest station with space,
@@ -169,6 +176,27 @@ nonisolated struct DockFinderService: Sendable {
             throw DockFinderError.outsideServiceArea
         }
         return nearest
+    }
+
+    /// Throws `outsideServiceArea` when no station at all is within reach,
+    /// like the nearest dock; otherwise a result, with no station when none
+    /// nearby has the bikes asked for.
+    static func nearestBike(
+        _ kind: BikeKind,
+        to location: CLLocation,
+        in network: StationNetwork,
+        locationIsApproximate: Bool = false
+    ) throws -> BikeSearchResult {
+        let closestStation = network.stations.map { location.distance(from: $0.location) }.min()
+        guard let closestStation, closestStation <= maxSearchDistance else {
+            throw DockFinderError.outsideServiceArea
+        }
+        let station = network.bikeStations(kind, around: location).first
+        return BikeSearchResult(
+            kind: kind,
+            station: station.flatMap { $0.straightLineDistance <= maxSearchDistance ? $0 : nil },
+            locationIsApproximate: locationIsApproximate
+        )
     }
 
     static func dock(

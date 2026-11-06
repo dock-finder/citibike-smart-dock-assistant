@@ -20,7 +20,7 @@ More phrases:
 - "Ask Dock Finder to check my school dock" (also "…to find a dock near school"): your usual dock's status right now, for any saved place
 - "Ask Dock Finder to check Mercer and Bleecker" (also "Ask Dock Finder if Mercer and Bleecker is full"): for stations Siri knows (below); "…to check a station" asks which one
 - "Ask Dock Finder to find a dock somewhere else" → "Where are you headed?" → an address, landmark or neighborhood
-- "Ask Dock Finder for Citi Bike status" (also "…how many bikes are out") for citywide totals
+- "Ask Dock Finder for the nearest e-bike" (also "…bike", "…classic bike", "…station with only e-bikes", "…to find a bike"): the nearest station with that kind of bike to ride away on. This took Citywide Status's place among the 10 App Shortcuts; citywide totals still answer "Ask Dock Finder a question" → "how many bikes are out?"
 - "Ask Dock Finder to direct me": directions to the dock just mentioned, or the nearest one with room
 - "Ask Dock Finder to stop guiding me" (not "stop directions", which Maps also claims); "Ask Dock Finder to end my bike ride" (also stops directions; plain "end my ride" goes to Maps)
 - "Ask Dock Finder a question" (also "…for help with a dock") → "What do you need?" → anything, answered the same way as **Ask a Question** in the app
@@ -58,7 +58,8 @@ How it's built:
 | Your usual dock at a saved place, rerouting if it's full | iPhone | "Ask Dock Finder to check my school dock" |
 | Dock near any address, landmark or neighborhood, right now | iPhone (Apple map search) | "Ask Dock Finder to find a dock somewhere else", or in the app (**Dock Near a Place**) |
 | Is a station full, and where to go instead | iPhone | "Ask Dock Finder to check Mercer and Bleecker" / "…to check a station" |
-| Citywide totals | iPhone | "Ask Dock Finder for Citi Bike status" |
+| Nearest bike to ride away on: any, e-bike, classic, or a station with only e-bikes | iPhone | "Ask Dock Finder for the nearest e-bike", or ask in your own words |
+| Citywide totals | iPhone | "Ask Dock Finder a question" → "how many bikes are out?", or in the app |
 | Set a usual or backup dock, save a place | iPhone (in the app) | none; in the app, or typed under **Ask a Question** |
 | **Turn-by-turn directions to a dock**, spoken with the phone locked, with a Lock Screen / Dynamic Island Live Activity | iPhone (Apple cycling routes, background location, speech) | "yes" to "Want me to direct you there?", or "Ask Dock Finder to direct me" |
 | Anything else, in your own words | iPhone (Apple Intelligence first where available, told the saved place names and every action including directions to a place, with a 4-second limit; then phrase rules and saved place and station names; Apple Intelligence also retries places and stations that weren't found); the **n8n backend** only in a build that sets one up (none does by default), when none of those understands the request or finds the place/station | "Ask Dock Finder a question", or **Ask a Question** in the app |
@@ -225,7 +226,8 @@ These can't be automated and **have not yet been verified on a device**. The Sim
 - [ ] **Speak Nearest Dock** appears once (not twice) among Dock Finder's actions in the Shortcuts app, and a shortcut with only that action, assigned under **Settings → Action Button → Shortcut**, behaves the same.
 - [ ] With the phone locked and headphones in, "Hey Siri, ask Dock Finder to start a ride to school" starts a ride **in one go, without opening the app** (also with a nickname). "Hey Siri, ask Dock Finder to start a ride" asks "Where are you heading?"; answering "Union Square" and "44 West 4th Street" each starts a ride; "home" (not saved) asks you to add it.
 - [ ] Every phrase in the root README runs its own action, not a neighbor's: especially "…to find a dock" (nearest to you, no question) vs "…to find a dock near school" vs "…to find a dock somewhere else" ("Where are you headed?"), and "…to start a ride to school" vs "…to start a ride". "Ask Dock Finder" alone does nothing of Dock Finder's.
-- [ ] "Hey Siri, ask Dock Finder to check Mercer and Bleecker" answers for a usual dock, a station near a saved place, and one just checked in the app (allow a minute after checking). An unknown station via "…to check a station" asks "Which station?" once. "Ask Dock Finder how many bikes are out" gives citywide totals.
+- [ ] "Hey Siri, ask Dock Finder to check Mercer and Bleecker" answers for a usual dock, a station near a saved place, and one just checked in the app (allow a minute after checking). An unknown station via "…to check a station" asks "Which station?" once. "Ask Dock Finder a question" → "how many bikes are out?" gives citywide totals.
+- [ ] "Hey Siri, ask Dock Finder for the nearest e-bike" (and "…bike", "…classic bike", "…station with only e-bikes") names the right station in one go. On a phone that had the earlier build, "Ask Dock Finder for Citi Bike status" no longer runs anything after the update, and every other phrase still runs its own action.
 - [ ] Saying "Doc Finder" (or Siri showing "doc") still reaches the app.
 - [ ] "Hey Siri, ask Dock Finder a question" asks "What do you need?"; "is Mercer and Bleecker full", "find a dock near Union Square" and "start a ride to school" each get the right answer, and "tell me a joke" gets the help message. "…for help with a dock" does the same.
 - [ ] With Apple Intelligence on: "Ask Dock Finder a question" → "direct me to school" starts directions to the school dock (not the nearest dock); "is the dock by my office full" checks the work dock; "how do I get to a dock near the Flatiron" starts directions there. "Hey Siri, ask Dock Finder to direct me to school" does the same in one go.

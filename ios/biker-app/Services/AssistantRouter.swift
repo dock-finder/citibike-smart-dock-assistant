@@ -79,6 +79,14 @@ struct AssistantRouter {
                 request = rule
                 parser = KeywordRequestParser()
             }
+            // The bike rule only fires on a clear "where's a bike" request,
+            // so it also wins when the model read one as something else
+            // (a dock near me, or one station).
+            if parser.answeredBy == .appleIntelligence, !request.isBikeSearch,
+               let rule = KeywordRequestParser.parse(text), rule.isBikeSearch {
+                request = rule
+                parser = KeywordRequestParser()
+            }
             // What was heard and what it became, so a wrong answer can be
             // traced in the team's sheet.
             Metrics.shared.log("request_understood", details: [
@@ -116,6 +124,9 @@ struct AssistantRouter {
 
         case .citywide:
             return try await service.citywideSummary().answer
+
+        case .nearestBike(let kind):
+            return try await service.findNearestBike(kind).answer
 
         case .place(let spoken):
             if let saved = store.place(matching: spoken) {

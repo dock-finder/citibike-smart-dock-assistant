@@ -36,6 +36,8 @@ nonisolated enum ParsedRequest: Sendable, Equatable {
     case directionsTo(String)
     /// "Stop directions".
     case stopDirections
+    /// "Nearest e-bike": a bike to ride away on, near the rider.
+    case nearestBike(BikeKind)
 }
 
 extension ParsedRequest {
@@ -46,6 +48,12 @@ extension ParsedRequest {
         case .startRide(let destination): destination.isEmpty
         default: false
         }
+    }
+
+    /// A bike to ride away on, rather than a dock.
+    nonisolated var isBikeSearch: Bool {
+        if case .nearestBike = self { return true }
+        return false
     }
 }
 
@@ -116,6 +124,12 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         if citywidePhrases.contains(where: request.contains) {
             return .citywide
         }
+        // After the citywide rule, so "how many bikes are out" keeps its
+        // meaning. It leaves "does Mercer and Bleecker have bikes" to the
+        // station rules below, since that isn't asking where to get one.
+        if let bike = parseBike(request) {
+            return bike
+        }
         // Short answers: "here", "nearest".
         if selfReferences.contains(request) || ["nearest", "closest", "nearest one", "closest one"].contains(request) {
             return .nearMe
@@ -141,6 +155,51 @@ nonisolated struct KeywordRequestParser: RequestParsing {
             return .nearMe
         }
         return nil
+    }
+
+    /// A bike to pick up near the rider: "nearest e-bike", "where can I get
+    /// a classic bike", "any bikes near me", "station with only e-bikes".
+    /// Not a dock ("bike dock", "return my bike"), and not near some other
+    /// named place, which this doesn't search.
+    static func parseBike(_ request: String) -> ParsedRequest? {
+        let text = unifyBikeWords(request)
+        if matches(#"\b(?:docks?|park|parking|return|drop off|drop it off)\b"#, text) {
+            return nil
+        }
+        let kind: BikeKind
+        if matches(#"\b(?:only|just|all) e-bikes?\b|\be-bikes? only\b|\bonly (?:has|have) e-bikes?\b|\b(?:no|without) classic bikes?\b|\bonly electric\b"#, text) {
+            kind = .ebikeOnly
+        } else if matches(#"\be-bikes?\b"#, text) {
+            kind = .ebike
+        } else if matches(#"\b(?:classic|regular|pedal|normal|manual|non-electric|nonelectric)(?: citi)? (?:bikes?|ones?)\b|\ba classic\b"#, text) {
+            kind = .classic
+        } else if matches(#"\b(?:bikes?|bicycles?|citi ?bikes?)\b"#, text) {
+            kind = .any
+        } else {
+            return nil
+        }
+        // Asking where to get one, not about one station or a ride.
+        let lookingFor = [
+            #"^(?:where(?:'s| is| are| can i)?|find|get|grab|need|want|i need|i want|i'm looking for|im looking for|looking for|show me|any|is there|are there|nearest|closest|which station|what station|what's the (?:nearest|closest)|whats the (?:nearest|closest)|what is the (?:nearest|closest)|can i get|i'd like|id like|station)\b"#,
+            #"\b(?:nearest|closest|near me|nearby|around me|around here|close by|near here)\b"#,
+        ]
+        guard lookingFor.contains(where: { matches($0, text) }) else { return nil }
+        if let target = capture(#"\b(?:near|by|around|close to|next to|at|on)\s+(.+)$"#, in: text),
+           !selfReferences.contains(target) {
+            return nil
+        }
+        return .nearestBike(kind)
+    }
+
+    /// One spelling for e-bikes: "ebike", "e bike", "electric bike" → "e-bike".
+    private static func unifyBikeWords(_ request: String) -> String {
+        request
+            .replacingOccurrences(of: #"\b(?:e bike|ebike|e-bike)(s?)\b"#, with: "e-bike$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\belectric (?:bike|bicycle|citi bike)(s?)\b"#, with: "e-bike$1", options: .regularExpression)
+    }
+
+    private static func matches(_ pattern: String, _ text: String) -> Bool {
+        text.range(of: pattern, options: .regularExpression) != nil
     }
 
     private static let directionEndings: Set<String> = [
@@ -318,12 +377,16 @@ nonisolated enum ModelRequestKind {
     case directions
     case directionsToPlace
     case stopDirections
+    case nearestBike
+    case nearestEbike
+    case nearestClassicBike
+    case nearestEbikeOnlyStation
     case unknown
 }
 
 @Generable
 nonisolated struct ModelParsedRequest {
-    @Guide(description: "nearMe: the rider wants a dock with room near where they are now. place: the rider wants to know where to dock near a named place, saved place, address, landmark or neighborhood. station: whether one named Citi Bike station has room. citywide: totals for the whole Citi Bike system. startRide: the rider is setting off to a destination and wants to be told where to dock when they get close. endRide: stop or cancel the current ride. directions: turn-by-turn directions to the dock just mentioned, with no place named ('take me there', 'direct me'). directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school', 'how do I get to a dock by Union Square'). stopDirections: stop the turn-by-turn directions. unknown: anything else.")
+    @Guide(description: "nearMe: the rider wants a dock with room near where they are now. place: the rider wants to know where to dock near a named place, saved place, address, landmark or neighborhood. station: whether one named Citi Bike station has room. citywide: totals for the whole Citi Bike system. startRide: the rider is setting off to a destination and wants to be told where to dock when they get close. endRide: stop or cancel the current ride. directions: turn-by-turn directions to the dock just mentioned, with no place named ('take me there', 'direct me'). directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school', 'how do I get to a dock by Union Square'). stopDirections: stop the turn-by-turn directions. nearestBike: the rider wants a bike to ride away on near where they are now, any kind ('nearest bike', 'where can I get a bike'). nearestEbike: the same, but an e-bike (electric bike). nearestClassicBike: the same, but a classic (regular, pedal) bike. nearestEbikeOnlyStation: the nearest station that has only e-bikes and no classic bikes. unknown: anything else.")
     var kind: ModelRequestKind
 
     @Guide(description: "For place, startRide or directionsToPlace: the place exactly as one of the rider's saved place names if it's one of them, otherwise as said or as a New York City address or landmark, such as 'Union Square' or '44 West 4th Street'. Otherwise empty.")
@@ -355,7 +418,7 @@ nonisolated struct OnDeviceModelParser: RequestParsing {
         var text = """
             You turn a Citi Bike rider's request in New York City into one action for the Dock Finder app. \
             Do not answer it. Choose the kind and fill in the place or station field; use empty strings for fields that don't apply. \
-            "Dock" may be written "doc".
+            "Dock" may be written "doc". Getting a bike to ride is not finding a dock: a dock is where a bike is returned.
             """
         if !savedPlaceNames.isEmpty {
             text += " The rider's saved places are: \(savedPlaceNames.joined(separator: ", ")). Treat those names, with or without \"my\", as places."
@@ -394,6 +457,10 @@ nonisolated struct OnDeviceModelParser: RequestParsing {
         case .directions: return .directions
         case .directionsToPlace: return place.isEmpty ? .directions : .directionsTo(place)
         case .stopDirections: return .stopDirections
+        case .nearestBike: return .nearestBike(.any)
+        case .nearestEbike: return .nearestBike(.ebike)
+        case .nearestClassicBike: return .nearestBike(.classic)
+        case .nearestEbikeOnlyStation: return .nearestBike(.ebikeOnly)
         case .unknown: return nil
         }
     }
