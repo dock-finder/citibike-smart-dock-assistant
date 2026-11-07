@@ -25,12 +25,13 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
     ///
     /// Budget: phrases with a blank multiply by what can fill it (a saved
     /// place by every saved place, a station by up to 60, a bike type by
-    /// 4). Keep the filled-in total under about 1,000, which is roughly
-    /// where Apple's limit on an app's phrases sits (unconfirmed); past it,
-    /// iOS may drop phrases without saying which. Today: 28 saved-place
-    /// phrases, 5 station phrases, 36 bike-type phrases, about 730 in all
-    /// with 5 saved places and 1,000 with 15. Anything left out still
-    /// works through Ask a Question.
+    /// 4). Apple limits an app's phrases, roughly around 1,000 filled in
+    /// (unconfirmed); past it, iOS may drop phrases without saying which.
+    /// Today: 60 saved-place phrases, 5 station phrases, 36 bike-type
+    /// phrases, about 890 in all with 5 saved places. Each extra saved
+    /// place adds 60, so past about 6 saved places, trim saved-place
+    /// wordings first. Anything left out still works through Ask a
+    /// Question.
     ///
     /// All 10 shortcut slots are used. If a new action needs one, retire
     /// Dock Near a Place ("…find a dock somewhere else") first, in its own
@@ -55,15 +56,21 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
             phrases: [
                 "Ask \(.applicationName) to start a ride to \(\.$place)",
                 "Ask \(.applicationName) to start riding to \(\.$place)",
+                "Ask \(.applicationName) to begin a ride to \(\.$place)",
                 "Ask \(.applicationName) to start a ride",
                 "Ask \(.applicationName) to begin a ride",
                 "Ask \(.applicationName) to start riding",
                 // More wordings, with and without "Ask".
                 "Ask \(.applicationName) to start a bike ride to \(\.$place)",
+                "Ask \(.applicationName) to start a Citi Bike ride to \(\.$place)",
+                "Ask \(.applicationName) to ride to \(\.$place)",
                 "Ask \(.applicationName) to start a bike ride",
                 "\(.applicationName) start a ride to \(\.$place)",
+                "\(.applicationName) start riding to \(\.$place)",
+                "\(.applicationName) begin a ride to \(\.$place)",
                 "\(.applicationName) start a bike ride to \(\.$place)",
                 "\(.applicationName) ride to \(\.$place)",
+                "\(.applicationName) I'm riding to \(\.$place)",
                 "\(.applicationName) I'm heading to \(\.$place)",
                 "\(.applicationName) start a ride",
                 "\(.applicationName) start a bike ride",
@@ -174,21 +181,43 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
             phrases: [
                 "Ask \(.applicationName) to check my \(\.$place) dock",
                 "Ask \(.applicationName) to find a dock near \(\.$place)",
+                "Ask \(.applicationName) to find a dock at \(\.$place)",
                 "Ask \(.applicationName) for a dock near \(\.$place)",
+                "Ask \(.applicationName) to find me a dock near \(\.$place)",
                 // Siri often hears "dock" as "doc".
                 "Ask \(.applicationName) to check my \(\.$place) doc",
                 "Ask \(.applicationName) to find a doc near \(\.$place)",
+                "Ask \(.applicationName) to find a doc at \(\.$place)",
                 "Ask \(.applicationName) for a doc near \(\.$place)",
+                "Ask \(.applicationName) to find me a doc near \(\.$place)",
                 // Name first, without "Ask".
                 "\(.applicationName) check my \(\.$place) dock",
                 "\(.applicationName) check my \(\.$place) doc",
                 // More wordings, with and without "Ask".
+                "Ask \(.applicationName) for my \(\.$place) dock",
+                "Ask \(.applicationName) for my \(\.$place) doc",
+                "Ask \(.applicationName) about my \(\.$place) dock",
+                "Ask \(.applicationName) about my \(\.$place) doc",
                 "Ask \(.applicationName) if my \(\.$place) dock is full",
                 "Ask \(.applicationName) if my \(\.$place) doc is full",
+                "Ask \(.applicationName) how my \(\.$place) dock is",
+                "Ask \(.applicationName) how my \(\.$place) doc is",
+                "Ask \(.applicationName) for a dock at \(\.$place)",
+                "Ask \(.applicationName) for a doc at \(\.$place)",
+                "\(.applicationName) my \(\.$place) dock",
+                "\(.applicationName) my \(\.$place) doc",
                 "\(.applicationName) is my \(\.$place) dock full",
                 "\(.applicationName) is my \(\.$place) doc full",
+                "\(.applicationName) how's my \(\.$place) dock",
+                "\(.applicationName) how's my \(\.$place) doc",
                 "\(.applicationName) find a dock near \(\.$place)",
                 "\(.applicationName) find a doc near \(\.$place)",
+                "\(.applicationName) find a dock at \(\.$place)",
+                "\(.applicationName) find a doc at \(\.$place)",
+                "\(.applicationName) find me a dock near \(\.$place)",
+                "\(.applicationName) find me a doc near \(\.$place)",
+                "\(.applicationName) dock near \(\.$place)",
+                "\(.applicationName) doc near \(\.$place)",
             ],
             shortTitle: "Dock Near Saved Place",
             systemImageName: "star"
@@ -297,6 +326,7 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
             intent: DirectMeIntent(),
             phrases: [
                 "Ask \(.applicationName) to direct me to \(\.$place)",
+                "Ask \(.applicationName) to guide me to \(\.$place)",
                 "Ask \(.applicationName) to take me to \(\.$place)",
                 "Ask \(.applicationName) for directions to \(\.$place)",
                 "Ask \(.applicationName) to direct me",
@@ -308,11 +338,14 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
                 "Ask \(.applicationName) to guide me to a doc",
                 // More wordings, with and without "Ask".
                 "Ask \(.applicationName) to navigate me to \(\.$place)",
+                "Ask \(.applicationName) to get me to \(\.$place)",
                 "Ask \(.applicationName) to guide me there",
                 "Ask \(.applicationName) to give me directions",
                 "\(.applicationName) direct me to \(\.$place)",
+                "\(.applicationName) guide me to \(\.$place)",
                 "\(.applicationName) take me to \(\.$place)",
                 "\(.applicationName) directions to \(\.$place)",
+                "\(.applicationName) navigate me to \(\.$place)",
                 "\(.applicationName) direct me",
                 "\(.applicationName) direct me there",
                 "\(.applicationName) take me there",
