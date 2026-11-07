@@ -217,6 +217,8 @@ nonisolated struct KeywordRequestParser: RequestParsing {
     private static let directionEndings: Set<String> = [
         "stop directions", "stop the directions", "cancel directions", "cancel the directions", "end directions",
         "stop guiding", "stop guiding me", "stop navigation", "stop the navigation", "stop navigating",
+        "stop guidance", "stop the guidance", "cancel guidance", "cancel the guidance", "end guidance", "end the guidance",
+        "stop guiding me to the dock", "turn off guidance", "turn off directions",
     ]
 
     private static let directionRequests = [
@@ -256,11 +258,11 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         if rideEndings.contains(request) {
             return .endRide
         }
-        if request.range(of: #"^(?:start|begin)(?: a| my| the)? (?:ride|trip)$"#, options: .regularExpression) != nil {
+        if request.range(of: #"^(?:start|begin)(?: me)?(?: a| my| the)? (?:ride|trip)$"#, options: .regularExpression) != nil {
             return .startRide("")
         }
         let patterns = [
-            #"^(?:start|begin)(?: a| my| the)? (?:ride|trip)(?: now)? (?:to|for|towards) (.+)$"#,
+            #"^(?:start|begin)(?: me)?(?: a| my| the)? (?:ride|trip)(?: now)? (?:to|for|towards) (.+)$"#,
             #"^(?:i'm|im|i am) (?:riding|biking|cycling|heading|going) (?:to|towards) (.+)$"#,
             #"^(?:ride|bike|riding|biking) (?:to|towards) (.+)$"#,
             #"^(?:take me|navigate|guide me) to (.+)$"#,
@@ -318,10 +320,13 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         var request = text.lowercased()
             .replacingOccurrences(of: "’", with: "'")
             .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "?.!,")))
-        for prefix in ["hey siri ", "hey siri, ", "please ", "can you ", "could you "] where request.hasPrefix(prefix) {
+        // Every polite opener, in any order: "could you please …".
+        let prefixes = ["hey siri ", "hey siri, ", "please ", "can you ", "could you ", "would you ", "will you "]
+        while let prefix = prefixes.first(where: { request.hasPrefix($0) }) {
             request.removeFirst(prefix.count)
         }
-        for suffix in [" please", " right now", " now"] where request.hasSuffix(suffix) {
+        let suffixes = [" please", " right now", " now"]
+        while let suffix = suffixes.first(where: { request.hasSuffix($0) }) {
             request.removeLast(suffix.count)
         }
         // Dictation often writes "dock" as "doc", since they sound the same.

@@ -65,6 +65,10 @@ struct BikeRequestParsingTests {
         ("What's the closest station that has an E bike", .nearestBike(.ebike)),
         ("Can you direct me to the nearest station that has only e-bikes", .nearestBike(.ebikeOnly)),
         ("take me to the nearest e-bike", .nearestBike(.ebike)),
+        ("Could you please cancel guidance", .stopDirections),
+        ("Could you please start me a bike ride to school", .startRide("school")),
+        ("Could you take me to the nearest station that only has electric bikes", .nearestBike(.ebikeOnly)),
+        ("can you please find me a dock", .nearMe),
     ])
     func readsLoggedRequestsRight(request: String, expected: ParsedRequest) {
         #expect(KeywordRequestParser.parse(request) == expected)
