@@ -393,16 +393,39 @@ nonisolated enum ModelRequestKind {
     case directions
     case directionsToPlace
     case stopDirections
-    case nearestBike
-    case nearestEbike
-    case nearestClassicBike
-    case nearestEbikeOnlyStation
+    case bike
     case unknown
 }
 
 @Generable
+nonisolated enum ModelBikeType {
+    case any
+    case ebike
+    case classic
+    case ebikeOnlyStation
+}
+
+@Generable
 nonisolated struct ModelParsedRequest {
-    @Guide(description: "nearMe: the rider wants a dock with room near where they are now. place: the rider wants to know where to dock near a named place, saved place, address, landmark or neighborhood. station: whether one named Citi Bike station has room. citywide: totals for the whole Citi Bike system. startRide: the rider is setting off to a destination and wants to be told where to dock when they get close. endRide: stop or cancel the current ride. directions: turn-by-turn directions to the dock just mentioned, with no place named ('take me there', 'direct me'). directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school', 'how do I get to a dock by Union Square'). stopDirections: stop the turn-by-turn directions. nearestBike: only when the rider asks where to get a bike to ride away on near where they are now, any kind ('nearest bike', 'where can I get a bike'); never for docks, saved places, stations or rides. nearestEbike: the same, but an e-bike (electric bike). nearestClassicBike: the same, but a classic (regular, pedal) bike. nearestEbikeOnlyStation: the nearest station that has only e-bikes and no classic bikes. unknown: anything else.")
+    /// Generated first, so the model says what the rider wants before it
+    /// picks a kind (a small model picks better after restating it).
+    @Guide(description: "One short sentence: what the rider wants, in your own words. For example: 'They want a dock with room near school.' or 'They want an e-bike to ride, near where they are.'")
+    var riderWants: String
+
+    @Guide(description: """
+        Pick exactly one. A DOCK is where the rider RETURNS a bike they are riding; a BIKE is one they PICK UP to ride away on.
+        - nearMe: a dock with room near where the rider is now ('find a dock', 'where can I park').
+        - place: a dock near a named place, saved place, address or landmark ('a dock near Union Square', 'check my school dock').
+        - station: whether one named Citi Bike station has room ('is Mercer and Bleecker full').
+        - citywide: totals for the whole Citi Bike system ('how many bikes are out').
+        - startRide: setting off to a destination, to be told where to dock on arrival ('start a ride to school').
+        - endRide: stop or cancel the current ride.
+        - directions: turn-by-turn directions to the dock just mentioned, no place named ('take me there').
+        - directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school').
+        - stopDirections: stop the turn-by-turn directions.
+        - bike: ONLY when the rider wants a bike to pick up and ride ('nearest e-bike', 'where can I get a bike'). Never for docks, saved places, stations or rides.
+        - unknown: anything else.
+        """)
     var kind: ModelRequestKind
 
     @Guide(description: "For place, startRide or directionsToPlace: the place exactly as one of the rider's saved place names if it's one of them, otherwise as said or as a New York City address or landmark, such as 'Union Square' or '44 West 4th Street'. Otherwise empty.")
@@ -410,12 +433,15 @@ nonisolated struct ModelParsedRequest {
 
     @Guide(description: "For station: the station name as said, such as 'Mercer and Bleecker'. Otherwise empty.")
     var station: String
+
+    @Guide(description: "For bike only: any (no kind named), ebike (an e-bike or electric bike), classic (a classic, regular or pedal bike), or ebikeOnlyStation (a station with only e-bikes, no classic bikes). Otherwise any.")
+    var bikeType: ModelBikeType
 }
 
-/// Runs first, on iPhones with Apple Intelligence turned on (iPhone 15
-/// Pro and newer), so requests are understood however they're worded.
-/// Everywhere else, or if the model can't tell or takes too long, it
-/// returns `nil` and the phrase rules handle the request.
+/// On iPhones with Apple Intelligence turned on (iPhone 15 Pro and newer),
+/// reads what the phrase rules don't read as a specific request (see
+/// AssistantRouter.answer). Everywhere else, or if the model can't tell or
+/// takes too long, it returns `nil` and the rules' reading stands.
 nonisolated struct OnDeviceModelParser: RequestParsing {
     /// What the rider calls their saved places, so "my office" or "Stern"
     /// is understood as one.
@@ -433,11 +459,18 @@ nonisolated struct OnDeviceModelParser: RequestParsing {
     static func instructions(savedPlaceNames: [String]) -> String {
         var text = """
             You turn a Citi Bike rider's request in New York City into one action for the Dock Finder app. \
-            Do not answer it. Choose the kind and fill in the place or station field; use empty strings for fields that don't apply. \
-            "Dock" may be written "doc". Getting a bike to ride is not finding a dock: a dock is where a bike is returned.
+            Do not answer it. First say what the rider wants, then choose the kind and fill in only the fields that apply; use empty strings for the others. \
+            "Dock" may be written "doc". A dock is where a bike is returned; a bike is what the rider picks up to ride.
+            Examples:
+            "is there room by my office" -> place, place "office"
+            "check my school dock" -> place, place "school"
+            "is Mercer and Bleecker packed" -> station, station "Mercer and Bleecker"
+            "heading to Union Square" -> startRide, place "Union Square"
+            "where can I grab an electric one" -> bike, bikeType ebike
+            "anywhere I can leave this bike" -> nearMe
             """
         if !savedPlaceNames.isEmpty {
-            text += " The rider's saved places are: \(savedPlaceNames.joined(separator: ", ")). Treat those names, with or without \"my\", as places."
+            text += "\nThe rider's saved places are: \(savedPlaceNames.joined(separator: ", ")). Treat those names, with or without \"my\", as places."
         }
         return text
     }
@@ -453,7 +486,8 @@ nonisolated struct OnDeviceModelParser: RequestParsing {
     private static func classify(_ text: String, instructions: String) async -> ParsedRequest? {
         do {
             let session = LanguageModelSession(instructions: instructions)
-            let parsed = try await session.respond(to: text, generating: ModelParsedRequest.self).content
+            // Greedy: the same words always get the same reading.
+            let parsed = try await session.respond(to: text, generating: ModelParsedRequest.self, options: .greedy).content
             return request(from: parsed)
         } catch {
             return nil
@@ -473,10 +507,13 @@ nonisolated struct OnDeviceModelParser: RequestParsing {
         case .directions: return .directions
         case .directionsToPlace: return place.isEmpty ? .directions : .directionsTo(place)
         case .stopDirections: return .stopDirections
-        case .nearestBike: return .nearestBike(.any)
-        case .nearestEbike: return .nearestBike(.ebike)
-        case .nearestClassicBike: return .nearestBike(.classic)
-        case .nearestEbikeOnlyStation: return .nearestBike(.ebikeOnly)
+        case .bike:
+            switch parsed.bikeType {
+            case .any: return .nearestBike(.any)
+            case .ebike: return .nearestBike(.ebike)
+            case .classic: return .nearestBike(.classic)
+            case .ebikeOnlyStation: return .nearestBike(.ebikeOnly)
+            }
         case .unknown: return nil
         }
     }

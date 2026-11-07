@@ -149,7 +149,7 @@ nonisolated struct OnDeviceModelStationPicker: StationPicking {
     }
 }
 
-private extension GenerationOptions {
+extension GenerationOptions {
     /// Always the most likely answer. Xcode 27's SDK renamed the
     /// initializer's `sampling:` label to `samplingMode:`; Xcode 26's
     /// (FoundationModels 1.5.2 and earlier) only has `sampling:`.
