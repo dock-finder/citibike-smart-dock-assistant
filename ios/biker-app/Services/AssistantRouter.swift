@@ -49,9 +49,10 @@ struct AssistantRouter {
             placeSearch: MapKitPlaceSearch(),
             store: store,
             rides: RideTracker.shared,
-            // Apple's model first, so a request is understood however it's
-            // worded; the phrase rules catch what it can't (or every
-            // request, on iPhones without Apple Intelligence).
+            // Tried in this order for what the phrase rules don't read as a
+            // specific request (they go first; see answer(_:)): Apple's
+            // model, then the rules' vague reading, then a bare saved place
+            // or station name.
             parsers: [
                 OnDeviceModelParser(savedPlaceNames: store.places.flatMap(\.spokenNames)),
                 KeywordRequestParser(),
@@ -68,53 +69,62 @@ struct AssistantRouter {
     var savedPlaces: [SavedPlace] { store.places }
 
     func answer(_ text: String) async throws -> DockAnswer {
+        // The phrase rules first. When they find a specific request, it's
+        // the one meant: the team's sheet showed Apple's model reading
+        // "check my school dock", "find a dock near JP Morgan" and "start a
+        // ride to school" as a bike search, which the rules all got right.
+        // Apple's model gets what the rules don't understand, or only
+        // understand vaguely ("near me", "direct me"), where it helps most.
+        let rules = parsers.first { $0 is KeywordRequestParser }
+        let ruleReading = rules == nil ? nil : KeywordRequestParser.parse(text)
+        if let rules, let ruleReading, !ruleReading.isGeneric {
+            return try await answer(text, as: ruleReading, by: rules)
+        }
         for candidate in parsers {
             guard var request = await candidate.parse(text) else { continue }
             var parser: any RequestParsing = candidate
-            // Apple's model sometimes reads "direct me to school" as plain
-            // "direct me" or "near me", which ends at the nearest dock.
-            // When the phrase rules found something more specific, they win.
-            if parser.answeredBy == .appleIntelligence, request.isGeneric,
-               let rule = KeywordRequestParser.parse(text), !rule.isGeneric {
-                request = rule
-                parser = KeywordRequestParser()
+            // Apple's model also reads requests that aren't about bikes as a
+            // bike search. Only words about a bike can be one; otherwise the
+            // rules' reading stands, or the next step tries.
+            if parser.answeredBy == .appleIntelligence, request.isBikeSearch,
+               !KeywordRequestParser.couldBeBikeSearch(text) {
+                guard let rules, let ruleReading else { continue }
+                request = ruleReading
+                parser = rules
             }
-            // The bike rule only fires on a clear "where's a bike" request,
-            // so it also wins when the model read one as something else
-            // (a dock near me, or one station).
-            if parser.answeredBy == .appleIntelligence, !request.isBikeSearch,
-               let rule = KeywordRequestParser.parse(text), rule.isBikeSearch {
-                request = rule
-                parser = KeywordRequestParser()
-            }
-            // What was heard and what it became, so a wrong answer can be
-            // traced in the team's sheet.
-            Metrics.shared.log("request_understood", details: [
-                "text": text,
-                "answered_by": parser.answeredBy.rawValue,
-                "request": String(describing: request),
-            ])
-            // A place Apple's model already wrote isn't worth asking it to rewrite.
-            var router = self
-            if parser.answeredBy == .appleIntelligence {
-                router.placeRewriter = nil
-            }
-            do {
-                var answer = try await router.handle(request)
-                // Unless Apple's model found the place or station, the
-                // parser is what understood it.
-                if answer.answeredBy == .fixedAction {
-                    answer.markAnswered(by: parser.answeredBy)
-                }
-                return answer
-            } catch DockFinderError.placeNotFound(let query) {
-                // The backend's AI rewrite may still find it ("that bagel place by Stern").
-                return try await askBackend(text, otherwise: .placeNotFound(query))
-            } catch DockFinderError.stationNotFound(let query) {
-                return try await askBackend(text, otherwise: .stationNotFound(query))
-            }
+            return try await answer(text, as: request, by: parser)
         }
         return try await askBackend(text, otherwise: nil)
+    }
+
+    /// Answers `request`, which `parser` read from `text`.
+    private func answer(_ text: String, as request: ParsedRequest, by parser: any RequestParsing) async throws -> DockAnswer {
+        // What was heard and what it became, so a wrong answer can be
+        // traced in the team's sheet.
+        Metrics.shared.log("request_understood", details: [
+            "text": text,
+            "answered_by": parser.answeredBy.rawValue,
+            "request": String(describing: request),
+        ])
+        // A place Apple's model already wrote isn't worth asking it to rewrite.
+        var router = self
+        if parser.answeredBy == .appleIntelligence {
+            router.placeRewriter = nil
+        }
+        do {
+            var answer = try await router.handle(request)
+            // Unless Apple's model found the place or station, the
+            // parser is what understood it.
+            if answer.answeredBy == .fixedAction {
+                answer.markAnswered(by: parser.answeredBy)
+            }
+            return answer
+        } catch DockFinderError.placeNotFound(let query) {
+            // The backend's AI rewrite may still find it ("that bagel place by Stern").
+            return try await askBackend(text, otherwise: .placeNotFound(query))
+        } catch DockFinderError.stationNotFound(let query) {
+            return try await askBackend(text, otherwise: .stationNotFound(query))
+        }
     }
 
     func handle(_ request: ParsedRequest) async throws -> DockAnswer {

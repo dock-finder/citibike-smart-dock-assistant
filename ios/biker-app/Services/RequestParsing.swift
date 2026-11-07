@@ -4,10 +4,11 @@
 //
 //  Understands free-form requests ("find me a dock near Union Square",
 //  "is Mercer and Bleecker full?", "direct me to school") on device.
-//  Where Apple Intelligence is available, Apple's on-device language model
-//  reads the request first and picks the action; the simple phrase rules
-//  (which work on every iPhone) handle it otherwise, or when the model
-//  can't tell. Only requests neither understands go to the n8n backend.
+//  The phrase rules (which work on every iPhone) go first: when they find a
+//  specific request, it's used. Otherwise, where Apple Intelligence is
+//  available, Apple's on-device language model picks the action (see
+//  AssistantRouter.answer). Only requests neither understands go to the
+//  n8n backend.
 //
 
 import Foundation
@@ -191,6 +192,17 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         return .nearestBike(kind)
     }
 
+    /// Whether `text` could be asking for a bike to ride: it mentions a
+    /// bike, and isn't about docking ("bike dock", "return my bike") or a
+    /// ride ("start a bike ride"). Apple's model's bike readings are only
+    /// trusted for these.
+    static func couldBeBikeSearch(_ text: String) -> Bool {
+        let request = unifyBikeWords(normalize(text))
+        guard matches(#"\b(?:e-bikes?|bikes?|bicycles?|citi ?bikes?|electric|classic)\b"#, request) else { return false }
+        if matches(#"\b(?:docks?|park|parking|return|drop off|drop it off)\b"#, request) { return false }
+        return !matches(#"\b(?:start|begin|end|stop|cancel|finish)\b.*\b(?:ride|trip)\b"#, request)
+    }
+
     /// One spelling for e-bikes: "ebike", "e bike", "electric bike" → "e-bike".
     private static func unifyBikeWords(_ request: String) -> String {
         request
@@ -225,7 +237,8 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         ]
         for pattern in toPlace {
             if let place = capture(pattern, in: request) {
-                return .directionsTo(place)
+                // "Direct me to the nearest e-bike": a bike, not a place.
+                return parseBike(place) ?? .directionsTo(place)
             }
         }
         return nil
@@ -238,6 +251,8 @@ nonisolated struct KeywordRequestParser: RequestParsing {
     ]
 
     private static func parseRide(_ request: String) -> ParsedRequest? {
+        // "Start a bike ride to school" is a ride, like "start a ride".
+        let request = request.replacingOccurrences(of: #"\b(?:citi )?bike (ride|trip)\b"#, with: "$1", options: .regularExpression)
         if rideEndings.contains(request) {
             return .endRide
         }
@@ -252,7 +267,8 @@ nonisolated struct KeywordRequestParser: RequestParsing {
         ]
         for pattern in patterns {
             if let destination = capture(pattern, in: request) {
-                return .startRide(destination)
+                // "Take me to the nearest e-bike": a bike, not a destination.
+                return parseBike(destination) ?? .startRide(destination)
             }
         }
         return nil
@@ -386,7 +402,7 @@ nonisolated enum ModelRequestKind {
 
 @Generable
 nonisolated struct ModelParsedRequest {
-    @Guide(description: "nearMe: the rider wants a dock with room near where they are now. place: the rider wants to know where to dock near a named place, saved place, address, landmark or neighborhood. station: whether one named Citi Bike station has room. citywide: totals for the whole Citi Bike system. startRide: the rider is setting off to a destination and wants to be told where to dock when they get close. endRide: stop or cancel the current ride. directions: turn-by-turn directions to the dock just mentioned, with no place named ('take me there', 'direct me'). directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school', 'how do I get to a dock by Union Square'). stopDirections: stop the turn-by-turn directions. nearestBike: the rider wants a bike to ride away on near where they are now, any kind ('nearest bike', 'where can I get a bike'). nearestEbike: the same, but an e-bike (electric bike). nearestClassicBike: the same, but a classic (regular, pedal) bike. nearestEbikeOnlyStation: the nearest station that has only e-bikes and no classic bikes. unknown: anything else.")
+    @Guide(description: "nearMe: the rider wants a dock with room near where they are now. place: the rider wants to know where to dock near a named place, saved place, address, landmark or neighborhood. station: whether one named Citi Bike station has room. citywide: totals for the whole Citi Bike system. startRide: the rider is setting off to a destination and wants to be told where to dock when they get close. endRide: stop or cancel the current ride. directions: turn-by-turn directions to the dock just mentioned, with no place named ('take me there', 'direct me'). directionsToPlace: turn-by-turn directions to a dock at a named place ('direct me to school', 'how do I get to a dock by Union Square'). stopDirections: stop the turn-by-turn directions. nearestBike: only when the rider asks where to get a bike to ride away on near where they are now, any kind ('nearest bike', 'where can I get a bike'); never for docks, saved places, stations or rides. nearestEbike: the same, but an e-bike (electric bike). nearestClassicBike: the same, but a classic (regular, pedal) bike. nearestEbikeOnlyStation: the nearest station that has only e-bikes and no classic bikes. unknown: anything else.")
     var kind: ModelRequestKind
 
     @Guide(description: "For place, startRide or directionsToPlace: the place exactly as one of the rider's saved place names if it's one of them, otherwise as said or as a New York City address or landmark, such as 'Union Square' or '44 West 4th Street'. Otherwise empty.")

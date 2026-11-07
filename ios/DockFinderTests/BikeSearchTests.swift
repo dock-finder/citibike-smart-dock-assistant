@@ -49,7 +49,35 @@ struct BikeRequestParsingTests {
 
     @Test(arguments: ["end my bike ride", "stop my bike ride"])
     func ridesAreNotBikeSearches(request: String) {
-        #expect(KeywordRequestParser.parse(request)?.isBikeSearch != true)
+        #expect(KeywordRequestParser.parse(request) == .endRide)
+    }
+
+    /// Requests from the team's sheet that Apple's model read wrong (most as
+    /// "nearest bike"); the rules read them right, and now go first.
+    @Test(arguments: [
+        ("Check my school dock", ParsedRequest.station("my school dock")),
+        ("Can you check my school doc", .station("my school dock")),
+        ("Find a dock near JP Morgan headquarters", .place("jp morgan headquarters")),
+        ("Can you start a ride to JP Morgan headquarters", .startRide("jp morgan headquarters")),
+        ("Start a bike ride to school", .startRide("school")),
+        ("Where is the nearest E bike", .nearestBike(.ebike)),
+        ("Where is the nearest electric bike", .nearestBike(.ebike)),
+        ("What's the closest station that has an E bike", .nearestBike(.ebike)),
+        ("Can you direct me to the nearest station that has only e-bikes", .nearestBike(.ebikeOnly)),
+        ("take me to the nearest e-bike", .nearestBike(.ebike)),
+    ])
+    func readsLoggedRequestsRight(request: String, expected: ParsedRequest) {
+        #expect(KeywordRequestParser.parse(request) == expected)
+    }
+
+    @Test(arguments: ["where's the nearest bike", "I want something electric", "any classic ones around"])
+    func bikeWordsCanBeABikeSearch(request: String) {
+        #expect(KeywordRequestParser.couldBeBikeSearch(request))
+    }
+
+    @Test(arguments: ["check my school dock", "near me", "find me a bike dock", "start a bike ride to school", "where can I return my bike"])
+    func otherWordsAreNeverABikeSearch(request: String) {
+        #expect(!KeywordRequestParser.couldBeBikeSearch(request))
     }
 }
 
@@ -181,6 +209,24 @@ struct BikeRoutingTests {
     @Test(arguments: [ParsedRequest.nearMe, .citywide, .station("e-bike")])
     func aClearBikeRequestWinsOverAnotherModelReading(model: ParsedRequest) async throws {
         let answer = try await router(model: model).answer("where's the nearest e-bike")
+        #expect(answer.text.hasPrefix("The nearest e-bike is at Court and State, "))
+    }
+
+    @Test(arguments: [ParsedRequest.nearestBike(.any), .citywide])
+    func aSpecificRuleReadingBeatsTheModel(model: ParsedRequest) async throws {
+        let answer = try await router(model: model).answer("is court and state full?")
+        #expect(answer.text.hasPrefix("Court and State has 6 docks open"))
+        #expect(answer.answeredBy == .phraseRules)
+    }
+
+    @Test func aModelBikeReadingOfWordsWithoutABikeIsIgnored() async throws {
+        // "Near me" is vague, so the model gets a say, but not a bike search.
+        let answer = try await router(model: .nearestBike(.any)).answer("near me")
+        #expect(answer.text.hasPrefix("Court and State has 6 docks open"))
+    }
+
+    @Test func theRulesBikeTypeWinsOverTheModels() async throws {
+        let answer = try await router(model: .nearestBike(.any)).answer("where is the nearest electric bike")
         #expect(answer.text.hasPrefix("The nearest e-bike is at Court and State, "))
     }
 
