@@ -90,6 +90,8 @@ Say "Hey Siri, …". *school* stands for any saved place's name or nickname; *Me
 | **Ask Dock Finder to direct me to *school***<br>also: *…to guide me to school*, *…to take me to school*, *…for directions to school* | Turn-by-turn directions to the best dock at that saved place (your usual dock, or the backup if it's full) |
 | **Ask Dock Finder to direct me**<br>also: *…to direct me there*, *…to take me there*, *…to guide me to a dock*, *Ask Dock Finder for directions* | Turn-by-turn directions to the dock you were just told about, or the nearest dock with room |
 | **Ask Dock Finder to stop guiding me**<br>also: *…to stop guiding me to the dock*, *…to stop guiding*, *…to stop guidance*, *…to cancel guidance* | Stops turn-by-turn directions (during a ride, before you arrive, it turns off guidance for that ride) |
+| **Dock Finder find a dock**, **Dock Finder nearest *e-bike***, **Dock Finder check my *school* dock** (being tried) | The same as the "Ask Dock Finder" versions, with the name first |
+| **Dock Finder question**, or just **Dock Finder** (being tried) | Asks "What do you need?", like Ask Dock Finder a question |
 | **Ask Dock Finder a question**<br>also: *Ask Dock Finder for help with a dock* | Asks "What do you need?", then answers whatever you say in your own words ("is the one on Mercer full?", "find a dock near the bagel place on Houston"), on the iPhone (see [Unclear requests](#unclear-requests-places-and-stations)). If nothing understands it, Siri says what you can ask |
 
 Every phrase with "dock" also works with **"doc"** ("Ask Dock Finder to find a doc"), since Siri often hears it that way.

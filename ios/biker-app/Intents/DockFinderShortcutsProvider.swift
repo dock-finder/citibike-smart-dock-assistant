@@ -16,6 +16,13 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
     /// deliberately no bare "Ask Dock Finder": Siri could match it on the
     /// shared opening and drop the rest.
     ///
+    /// A few actions also take the name first, with no "Ask" ("Dock Finder
+    /// find a dock", "Dock Finder nearest e-bike"), and the bare name "Dock
+    /// Finder" runs Ask a Question. These were added to try on phones; if
+    /// one opens the app, goes to another app, or the bare name swallows
+    /// longer requests, take it out (removing a phrase doesn't move any
+    /// shortcut).
+    ///
     /// **Never reorder or remove these; only append.** iOS remembers which
     /// phrase belongs to which position in this list and doesn't always
     /// re-read it when the app is updated, so reordering once made "start a
@@ -74,6 +81,13 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
                 "Ask \(.applicationName) to find the nearest doc",
                 "Ask \(.applicationName) for a doc",
                 "Ask \(.applicationName) for the nearest doc",
+                // Name first, without "Ask".
+                "\(.applicationName) find a dock",
+                "\(.applicationName) find me a dock",
+                "\(.applicationName) nearest dock",
+                "\(.applicationName) find a doc",
+                "\(.applicationName) find me a doc",
+                "\(.applicationName) nearest doc",
             ],
             shortTitle: "Find Dock",
             systemImageName: "bicycle"
@@ -92,6 +106,9 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
                 "Ask \(.applicationName) to find a doc at \(\.$place)",
                 "Ask \(.applicationName) for a doc near \(\.$place)",
                 "Ask \(.applicationName) to find me a doc near \(\.$place)",
+                // Name first, without "Ask".
+                "\(.applicationName) check my \(\.$place) dock",
+                "\(.applicationName) check my \(\.$place) doc",
             ],
             shortTitle: "Dock Near Saved Place",
             systemImageName: "star"
@@ -149,6 +166,10 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
                 "Ask \(.applicationName) where I can get an \(\.$kind)",
                 "Ask \(.applicationName) for a bike near me",
                 "Ask \(.applicationName) for the nearest bike near me",
+                // Name first, without "Ask".
+                "\(.applicationName) nearest \(\.$kind)",
+                "\(.applicationName) find a \(\.$kind)",
+                "\(.applicationName) find an \(\.$kind)",
             ],
             shortTitle: "Find Bike",
             systemImageName: "bicycle.circle"
@@ -195,6 +216,11 @@ struct DockFinderShortcutsProvider: AppShortcutsProvider {
                 "Ask \(.applicationName) for help with a dock",
                 // Siri often hears "dock" as "doc".
                 "Ask \(.applicationName) for help with a doc",
+                // Name first: then "What do you need?". The bare name too, so
+                // "Hey Siri, Dock Finder" asks instead of only opening the app.
+                "\(.applicationName) question",
+                "\(.applicationName) I have a question",
+                "\(.applicationName)",
             ],
             shortTitle: "Ask a Question",
             systemImageName: "bubble.left"

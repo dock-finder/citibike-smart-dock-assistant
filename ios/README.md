@@ -24,6 +24,7 @@ More phrases:
 - "Ask Dock Finder to direct me": directions to the dock just mentioned, or the nearest one with room
 - "Ask Dock Finder to stop guiding me" (not "stop directions", which Maps also claims); "Ask Dock Finder to end my bike ride" (also stops directions; plain "end my ride" goes to Maps)
 - "Ask Dock Finder a question" (also "…for help with a dock") → "What do you need?" → anything, answered the same way as **Ask a Question** in the app
+- Being tried: the name first, without "Ask": "Dock Finder find a dock" (also "…nearest dock"), "Dock Finder nearest e-bike" (any bike type), "Dock Finder check my school dock", and "Dock Finder question" or just "Dock Finder" → "What do you need?". If one opens the app or goes to another app, or the bare name cuts off longer requests, remove it
 
 The [root README](../README.md#what-to-say-to-siri) has the complete phrase list. Keep it in sync when phrases change; `shortcuts/generate_docs.py` also writes the list into `docs/shortcuts.md`.
 

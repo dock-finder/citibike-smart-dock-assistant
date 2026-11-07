@@ -51,14 +51,22 @@ struct SiriPhraseTests {
         )
     }
 
-    @Test func everyPhraseIsAskDockFinderAndARequest() throws {
+    @Test func everyPhraseStartsWithTheAppsName() throws {
         let phrases = try shortcuts().flatMap(\.phrases)
         #expect(!phrases.isEmpty)
         for phrase in phrases {
-            #expect(phrase.hasPrefix("Ask ${applicationName} "), "\(phrase) should start with \"Ask Dock Finder\"")
+            #expect(
+                phrase.hasPrefix("Ask ${applicationName} ") || phrase.hasPrefix("${applicationName}"),
+                "\(phrase) should start with \"Ask Dock Finder\" or \"Dock Finder\""
+            )
         }
         // A bare "Ask Dock Finder" could win on the shared opening and drop the request.
         #expect(!phrases.contains("Ask ${applicationName}"))
+    }
+
+    @Test func theBareNameAsksAQuestion() throws {
+        let owners = try shortcuts().filter { $0.phrases.contains("${applicationName}") }.map(\.intent)
+        #expect(owners == ["AskDockFinderIntent"])
     }
 
     @Test func everyDockPhraseAlsoTakesDoc() throws {
