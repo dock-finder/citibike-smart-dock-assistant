@@ -2,8 +2,10 @@
 
 Copy-paste text for Dock Finder's TestFlight and App Store pages.
 
-- **Privacy Policy URL:** https://github.com/dock-finder/citibike-smart-dock-assistant/blob/main/docs/privacy.md
-- **Support URL:** https://github.com/dock-finder/citibike-smart-dock-assistant/blob/main/docs/support.md
+- **Privacy Policy URL:** https://docs.google.com/document/d/1c3M8glsfjIe3qMherNygS6MaHCteyxg609IB2V2Oltw/view
+- **Support URL:** https://docs.google.com/document/d/1O2KP8ZIn-s7UkUS4sUY_UhSqI4v7Kb4KQa7qM4s_ik0/view
+
+The privacy policy and support pages are public Google Docs, so they stay reachable when this repo goes private. `docs/privacy.md` and `docs/support.md` are the source text: when you change one, paste the change into its Google Doc too.
 
 ## TestFlight → Test Information
 

@@ -1,3 +1,5 @@
+<!-- Published as a public Google Doc; see docs/app-store-connect.md for the link. Keep the two in sync. -->
+
 # Dock Finder Support
 
 Dock Finder helps Citi Bike riders in New York City find an open dock before they get there, hands-free. It's in testing on TestFlight.
@@ -37,4 +39,4 @@ You can also ask from the home screen in the app.
 
 ## Privacy
 
-See the [privacy policy](privacy.md). Usage sharing is optional and can be turned off any time under **Privacy** on the home screen.
+See the [privacy policy](https://docs.google.com/document/d/1c3M8glsfjIe3qMherNygS6MaHCteyxg609IB2V2Oltw/view). Usage sharing is optional and can be turned off any time under **Privacy** on the home screen.
