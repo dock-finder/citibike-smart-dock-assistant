@@ -1,3 +1,5 @@
+<!-- Published as a public Google Doc; see docs/app-store-connect.md for the link. Keep the two in sync. -->
+
 # Dock Finder Privacy Policy
 
 _Last updated: October 20, 2026_
