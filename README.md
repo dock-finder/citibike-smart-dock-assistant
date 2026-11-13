@@ -49,7 +49,7 @@ Arrive at a saved place (school, work, home) and Dock Finder tells you where to 
 
 ### Directions to the dock
 
-Whenever a Siri answer names a dock (finding a dock, checking a station, your saved place's dock), it ends with **"Want me to direct you there?"**. Starting a ride asks instead whether to guide you when you're close, and the alert you get when arriving at a saved place ends with "For directions, say: Hey Siri, ask Dock Finder to direct me." Say **"yes"**: Siri confirms ("Okay, directing you to West 4th and Mercer."), then Dock Finder's own voice guides you there turn by turn through your headphones, with the phone locked. It holds its own voice for an estimated time (about 1.5 seconds plus 0.4 seconds per word of Siri's line), so the two rarely overlap:
+Whenever a Siri answer names a dock (finding a dock, checking a station, your saved place's dock), it ends with **"Want me to direct you there?"**. Starting a ride asks instead whether to guide you when you're close, and the alert you get when arriving at a saved place ends with "For directions, say: Hey Siri, ask Dock Finder to direct me." (unless it's just telling you your usual dock has room: you already know the way there). Say **"yes"**: Siri confirms ("Okay, directing you to West 4th and Mercer."), then Dock Finder's own voice guides you there turn by turn through your headphones, with the phone locked. It holds its own voice for an estimated time (about 1.5 seconds plus 0.4 seconds per word of Siri's line), so the two rarely overlap:
 
 > "0.3 miles to West 4th and Mercer. Head east on West 14th Street." … "In 500 feet, turn right onto Bleecker Street." … "Turn right onto Bleecker Street." … "You've arrived at West 4th and Mercer, 8 docks open."
 

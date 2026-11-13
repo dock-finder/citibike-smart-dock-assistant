@@ -221,7 +221,8 @@ final class PlaceArrivalMonitor {
 
     /// The dock answer for `place`, logged and offered for directions.
     private static func liveAnswer(for place: SavedPlace) async throws -> String {
-        let answer = try await DockFinderService.live.findDock(for: place).answer
+        let result = try await DockFinderService.live.findDock(for: place)
+        let answer = result.answer
         var text = answer.text
         let here = LocationService.shared.lastKnownLocation
         Metrics.shared.log(
@@ -235,7 +236,12 @@ final class PlaceArrivalMonitor {
         SavingsStore.shared.recordHandsFree(context: "place_arrival")
         if let station = answer.station {
             GuidanceSession.shared.offer(station)
-            text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
+            // The rider already knows the way to their own usual dock, so
+            // only point out directions when they're sent somewhere else.
+            // "Direct me" still works either way.
+            if !result.usesUsualDock {
+                text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
+            }
         }
         return text
     }
