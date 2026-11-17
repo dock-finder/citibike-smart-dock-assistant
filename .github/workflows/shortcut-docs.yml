@@ -8,7 +8,6 @@ on:
     # The landing page in site/ never affects docs/shortcuts.md.
     paths-ignore:
       - "site/**"
-      - ".github/workflows/site.yml"
   workflow_dispatch:
 
 permissions:
