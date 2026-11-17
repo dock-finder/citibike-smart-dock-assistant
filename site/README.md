@@ -42,10 +42,10 @@ App Store builds come from **Xcode Cloud** (the "Dock Finder | Default | Archive
 
 1. In Xcode, open the **Report navigator → Cloud**, right-click the **Default** workflow and choose **Edit Workflow…** (or App Store Connect → the app → **Xcode Cloud → Manage Workflows**).
 2. Under **Start Conditions**, select the **Branch Changes** condition for `main`.
-3. Under **Files and Folders**, choose **Don't start a build if only selected files and folders change**, and add `site`.
+3. Under **Files and Folders**, choose **Don't start a build if only selected files and folders change**, and add `site` and `.github`.
 4. Save.
 
-Pushes that touch only `site/` then skip the archive; a push that also touches `ios/` still builds.
+Pushes that touch only `site/` or GitHub workflow files then skip the archive; a push that also touches `ios/` still builds. Set this up before merging a PR that changes only those folders, or that merge starts an archive.
 
 The repo's GitHub Actions workflow, `shortcut-docs.yml`, also ignores pushes that only touch `site/`.
 
