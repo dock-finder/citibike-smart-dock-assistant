@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dock Finder: hands-free bike share docking</title>
+  <meta name="description" content="Dock Finder checks live dock availability as you ride and tells you where to dock before you arrive, out loud, with your phone locked in your pocket.">
+  <meta name="theme-color" content="#0b2a5e">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Dock Finder">
+  <meta property="og:description" content="Never circle a full bike share station again. Dock Finder tells you where to dock before you arrive.">
+  <meta property="og:image" content="app-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    :root {
+      --navy: #0b2a5e;
+      --blue: #1565e0;
+      --teal: #0fa3c7;
+      --cyan: #22e0e8;
+      --bg: #f6f8fc;
+      --surface: #ffffff;
+      --text: #0d1b33;
+      --muted: #52617a;
+      --line: #dfe5ef;
+      --chip: #e8f0fd;
+      --shadow: 0 20px 50px -20px rgba(11, 42, 94, .35);
+      --radius: 20px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #07111f;
+        --surface: #0e1c31;
+        --text: #eaf1fb;
+        --muted: #9db0cb;
+        --line: #1d3150;
+        --chip: #12284a;
+        --shadow: 0 20px 50px -20px rgba(0, 0, 0, .7);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    img { max-width: 100%; display: block; }
+    .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+    /* Nav */
+    .nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(180%) blur(16px);
+      -webkit-backdrop-filter: saturate(180%) blur(16px);
+      background: color-mix(in srgb, var(--bg) 78%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; letter-spacing: -.01em; }
+    .brand img { width: 30px; height: 30px; border-radius: 8px; }
+    .nav ul { display: flex; gap: 24px; list-style: none; margin: 0; padding: 0; font-size: 15px; }
+    .nav ul a { text-decoration: none; color: var(--muted); }
+    .nav ul a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      position: relative; overflow: hidden;
+      background:
+        radial-gradient(1200px 500px at 85% -10%, rgba(34, 224, 232, .35), transparent 60%),
+        linear-gradient(140deg, #0d4fc9 0%, #1565e0 40%, #0e7fc0 75%, #0fa3c7 100%);
+      color: #fff;
+    }
+    .hero::before {
+      /* faint street grid, echoing the app icon */
+      content: ""; position: absolute; inset: -40%;
+      background-image:
+        linear-gradient(rgba(255,255,255,.08) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(255,255,255,.08) 2px, transparent 2px);
+      background-size: 120px 120px;
+      transform: rotate(-16deg);
+      pointer-events: none;
+    }
+    .hero .wrap {
+      position: relative;
+      display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center;
+      padding: 88px 0 96px;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; letter-spacing: .02em;
+      padding: 6px 12px; border-radius: 999px;
+      background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    }
+    .eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+    h1 {
+      font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -.035em;
+      margin: 20px 0 18px; font-weight: 800;
+    }
+    .lede { font-size: clamp(18px, 2vw, 21px); color: rgba(255,255,255,.88); max-width: 34ch; margin: 0 0 32px; }
+    .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 22px; border-radius: 14px; font-weight: 600; font-size: 16px;
+      text-decoration: none; transition: transform .15s ease, background .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-store { background: #000; color: #fff; }
+    .btn-store svg { width: 20px; height: 20px; }
+    .btn-store small { display: block; font-size: 11px; font-weight: 500; opacity: .8; line-height: 1.1; }
+    .btn-store span { line-height: 1.15; }
+    .btn-store[aria-disabled="true"] { cursor: default; }
+    .btn-store[aria-disabled="true"]:hover { transform: none; }
+    .btn-ghost { color: #fff; border: 1px solid rgba(255,255,255,.35); }
+    .btn-ghost:hover { background: rgba(255,255,255,.1); }
+
+    /* Phone mockup */
+    .phone {
+      justify-self: center;
+      width: min(320px, 100%); aspect-ratio: 9 / 19.2;
+      border-radius: 48px; padding: 12px;
+      background: #0a0f1a;
+      box-shadow: 0 40px 80px -30px rgba(0,0,0,.6), inset 0 0 0 2px #2a3242;
+      transform: rotate(3deg);
+    }
+    .screen {
+      position: relative; height: 100%; border-radius: 38px; overflow: hidden;
+      background:
+        radial-gradient(400px 300px at 70% 10%, rgba(34,224,232,.35), transparent 60%),
+        linear-gradient(170deg, #0b2a5e, #0d3f8f 55%, #0c6aa8);
+      color: #fff; padding: 52px 14px 16px;
+      display: flex; flex-direction: column;
+    }
+    .island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 96px; height: 28px; border-radius: 20px; background: #000; }
+    .clock { text-align: center; }
+    .clock .date { font-size: 13px; font-weight: 600; opacity: .85; }
+    .clock .time { font-size: 64px; font-weight: 700; letter-spacing: -.03em; line-height: 1; margin-top: 2px; }
+    .notifs { margin-top: auto; display: grid; gap: 8px; }
+    .notif {
+      background: rgba(255,255,255,.16); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border-radius: 18px; padding: 10px 12px; font-size: 12.5px; line-height: 1.35;
+    }
+    .notif-head { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: .8; margin-bottom: 3px; }
+    .notif-head img { width: 16px; height: 16px; border-radius: 4px; }
+    .notif-head .ago { margin-left: auto; }
+    .notif b { font-weight: 600; }
+    .live {
+      background: rgba(5, 15, 32, .55); border-radius: 18px; padding: 10px 12px;
+      display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 12px;
+    }
+    .live .arrow { width: 34px; height: 34px; border-radius: 10px; background: var(--cyan); color: var(--navy); display: grid; place-items: center; font-weight: 800; font-size: 18px; }
+    .live .turn { font-weight: 600; font-size: 13px; }
+    .live .dist { font-size: 11px; opacity: .75; }
+    .live .docks { text-align: right; }
+    .live .docks strong { display: block; font-size: 18px; color: var(--cyan); line-height: 1; }
+
+    /* Sections */
+    section { padding: 96px 0; }
+    .section-head { max-width: 640px; margin-bottom: 48px; }
+    .kicker { color: var(--blue); font-weight: 700; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; }
+    @media (prefers-color-scheme: dark) { .kicker { color: var(--cyan); } }
+    h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.08; letter-spacing: -.025em; margin: 10px 0 14px; }
+    .section-head p { color: var(--muted); margin: 0; font-size: 18px; }
+
+    /* Conversation */
+    .convo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .step {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 26px; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .step-num { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+    .step h3 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+    .bubble { border-radius: 18px; padding: 12px 15px; font-size: 15.5px; line-height: 1.45; max-width: 95%; }
+    .bubble.you { align-self: flex-end; background: var(--blue); color: #fff; border-bottom-right-radius: 6px; }
+    .bubble.app { align-self: flex-start; background: var(--chip); border-bottom-left-radius: 6px; }
+    .bubble .who { display: block; font-size: 11.5px; font-weight: 700; opacity: .7; margin-bottom: 2px; letter-spacing: .02em; }
+
+    /* Features */
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .feature {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px;
+    }
+    .icon {
+      width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center;
+      background: linear-gradient(140deg, var(--blue), var(--teal)); color: #fff; margin-bottom: 18px;
+    }
+    .icon svg { width: 24px; height: 24px; }
+    .feature h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.01em; }
+    .feature p { margin: 0; color: var(--muted); font-size: 16px; }
+    .feature q { quotes: "\201C" "\201D"; font-style: normal; color: var(--text); font-weight: 500; }
+
+    /* Privacy band */
+    .band { background: var(--navy); color: #fff; }
+    .band .kicker { color: var(--cyan); }
+    .band .section-head p { color: rgba(255,255,255,.75); }
+    .points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+    .points h3 { font-size: 18px; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
+    .points h3::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); flex: none; }
+    .points p { margin: 0; color: rgba(255,255,255,.75); font-size: 16px; }
+
+    /* Closing CTA */
+    .closing { text-align: center; }
+    .closing img { width: 96px; height: 96px; border-radius: 22px; margin: 0 auto 22px; box-shadow: var(--shadow); }
+    .closing h2 { margin-inline: auto; max-width: 18ch; }
+    .closing p { color: var(--muted); margin: 0 auto 28px; max-width: 46ch; font-size: 18px; }
+    .closing .ctas { justify-content: center; }
+    .closing .btn-ghost { color: var(--text); border-color: var(--line); }
+    .closing .btn-ghost:hover { background: var(--chip); }
+
+    footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; }
+    footer nav { display: flex; gap: 20px; }
+    footer a { text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    footer .disclaimer { flex-basis: 100%; margin: 0; font-size: 13px; }
+
+    @media (max-width: 900px) {
+      .hero .wrap { grid-template-columns: 1fr; padding: 56px 0 72px; gap: 56px; }
+      .phone { transform: none; width: min(290px, 100%); }
+      .convo, .features, .points { grid-template-columns: 1fr; }
+      section { padding: 72px 0; }
+    }
+    @media (max-width: 560px) {
+      .nav ul { display: none; }
+      .ctas .btn { width: 100%; justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="favicon.png" alt="">Dock Finder</a>
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+        <li><a href="https://docs.google.com/document/d/1O2KP8ZIn-s7UkUS4sUY_UhSqI4v7Kb4KQa7qM4s_ik0/view">Support</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div class="wrap">
+        <div>
+          <span class="eyebrow"><span class="dot"></span>For Citi Bike riders in NYC</span>
+          <h1>Never circle a full dock again.</h1>
+          <p class="lede">Dock Finder checks live dock availability as you ride and tells you where to dock before you arrive. Out loud, with your phone locked in your pocket.</p>
+          <div class="ctas">
+            <!--
+              App Store button. While the app isn't live it's shown as "Coming soon".
+              Once it is: set href to the App Store link, delete aria-disabled,
+              and change the small text to "Download on the".
+            -->
+            <a class="btn btn-store" aria-disabled="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.87 2.3 1.15-.05 1.58-.75 2.97-.75 1.39 0 1.78.75 3 .72 1.24-.02 2.02-1.12 2.78-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.67zM14.08 5.85c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
+              <span><small>Coming soon to the</small>App Store</span>
+            </a>
+            <a class="btn btn-ghost" href="#how">See how it works</a>
+          </div>
+        </div>
+
+        <div class="phone" role="img" aria-label="An iPhone Lock Screen showing a Dock Finder alert that the usual dock is full, with turn-by-turn directions to another dock.">
+          <div class="screen">
+            <div class="island"></div>
+            <div class="clock">
+              <div class="date">Tuesday, November 17</div>
+              <div class="time">8:52</div>
+            </div>
+            <div class="notifs">
+              <div class="notif">
+                <div class="notif-head"><img src="favicon.png" alt="">DOCK FINDER<span class="ago">now</span></div>
+                <b>Your usual dock is full.</b> Go to Washington and Greene, 8 docks, 350 feet from school.
+              </div>
+              <div class="live">
+                <div class="arrow">↱</div>
+                <div>
+                  <div class="turn">Right onto Greene St</div>
+                  <div class="dist">In 500 ft · Washington &amp; Greene</div>
+                </div>
+                <div class="docks"><strong>8</strong>docks</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">How it works</div>
+          <h2>Say where you're going. Then just ride.</h2>
+          <p>No tapping, no unlocking, no stopping at the curb to check a map. Dock Finder talks to you through your headphones.</p>
+        </div>
+        <div class="convo">
+          <div class="step">
+            <div class="step-num">1 · BEFORE YOU RIDE</div>
+            <h3>Tell Siri</h3>
+            <div class="bubble you"><span class="who">YOU</span>Hey Siri, ask Dock Finder to start a ride to school.</div>
+            <div class="bubble app"><span class="who">DOCK FINDER</span>Got it. I'll tell you where to dock when you're about 0.3 miles from school.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2 · AS YOU GET CLOSE</div>
+            <h3>Hear where there's room</h3>
+            <div class="bubble app"><span class="who">DOCK FINDER</span>Your usual dock is full. Go to Washington and Greene, 8 docks, 350 feet from school.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3 · IF YOU WANT</div>
+            <h3>Get turn-by-turn</h3>
+            <div class="bubble you"><span class="who">YOU</span>Yes.</div>
+            <div class="bubble app"><span class="who">DOCK FINDER</span>In 500 feet, turn right onto Greene Street.</div>
+            <div class="bubble app"><span class="who">DOCK FINDER</span>You've arrived at Washington and Greene, 8 docks open.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">Features</div>
+          <h2>Everything you need at the end of a ride.</h2>
+          <p>Built around the moment you actually need it: a block away, both hands on the handlebars.</p>
+        </div>
+        <div class="features">
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg></div>
+            <h3>Start a ride with Siri</h3>
+            <p><q>Ask Dock Finder to start a ride to work.</q> When you get close, it checks your usual dock, and if it's full, names the nearest one with room.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg></div>
+            <h3>Turn-by-turn to the dock</h3>
+            <p>Spoken directions to the dock, with the next turn on your Lock Screen and in the Dynamic Island. If the dock fills up on the way, it reroutes you.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></div>
+            <h3>Alerts at saved places</h3>
+            <p>Save Home, Work or School and pick a usual dock. Ride up and Dock Finder tells you where to dock, even if you never started a ride.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+            <h3>Check any station</h3>
+            <p>Ask whether a station has room, find a dock near you or near a saved place, or hear how many bikes are out across the city.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M4 7v4"/></svg></div>
+            <h3>One press with the Action Button</h3>
+            <p>Hold the Action Button and hear the nearest station with room, plus how many classic bikes and e-bikes it has. Phone stays in your pocket.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+            <h3>See what you save</h3>
+            <p>A dashboard estimates the minutes, and the e-bike dollars, you've saved every time Dock Finder steered you away from a full dock.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" class="band">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">Privacy</div>
+          <h2>Your rides stay on your phone.</h2>
+          <p>Dock Finder reads Citi Bike's public live station feed directly and works out every answer on your iPhone.</p>
+        </div>
+        <div class="points">
+          <div>
+            <h3>No account</h3>
+            <p>There's nothing to sign up for. Install it, save a place, and go.</p>
+          </div>
+          <div>
+            <h3>Answers on device</h3>
+            <p>There's no Dock Finder server. Dock picks are worked out on your iPhone, with Apple's on-device model helping where Apple Intelligence is available.</p>
+          </div>
+          <div>
+            <h3>Usage data is opt-in</h3>
+            <p>Sharing usage data with the team is off unless you choose to share it, and you can turn it off any time under Privacy.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <div class="wrap">
+        <img src="app-icon.png" alt="Dock Finder app icon">
+        <h2>Ride to the dock that has room.</h2>
+        <p>Dock Finder is for iPhone. Questions or feedback? We'd love to hear from you.</p>
+        <div class="ctas">
+          <a class="btn btn-store" aria-disabled="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.87 2.3 1.15-.05 1.58-.75 2.97-.75 1.39 0 1.78.75 3 .72 1.24-.02 2.02-1.12 2.78-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.67zM14.08 5.85c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
+            <span><small>Coming soon to the</small>App Store</span>
+          </a>
+          <a class="btn btn-ghost" href="https://docs.google.com/document/d/1O2KP8ZIn-s7UkUS4sUY_UhSqI4v7Kb4KQa7qM4s_ik0/view">Get support</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>© 2026 Dock Finder team</span>
+      <nav>
+        <a href="https://docs.google.com/document/d/1c3M8glsfjIe3qMherNygS6MaHCteyxg609IB2V2Oltw/view">Privacy Policy</a>
+        <a href="https://docs.google.com/document/d/1O2KP8ZIn-s7UkUS4sUY_UhSqI4v7Kb4KQa7qM4s_ik0/view">Support</a>
+      </nav>
+      <p class="disclaimer">Dock Finder uses Citi Bike's public station data. It isn't affiliated with or endorsed by Citi Bike or Lyft.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

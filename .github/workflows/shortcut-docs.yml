@@ -5,6 +5,10 @@ name: Shortcut docs
 # workflow and the app's Siri phrases. Commits back only when something changed.
 on:
   push:
+    # The landing page in site/ never affects docs/shortcuts.md.
+    paths-ignore:
+      - "site/**"
+      - ".github/workflows/site.yml"
   workflow_dispatch:
 
 permissions:

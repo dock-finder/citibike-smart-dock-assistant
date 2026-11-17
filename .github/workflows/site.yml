@@ -1,0 +1,38 @@
+name: Landing page
+
+# Publishes site/ (the Dock Finder landing page) to GitHub Pages.
+# Runs only when something under site/ changes on main, so app changes don't
+# redeploy the site. The App Store build is Xcode Cloud, not this workflow:
+# its start condition in App Store Connect is what keeps site-only pushes from
+# starting an iOS archive (see site/README.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
