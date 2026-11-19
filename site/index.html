@@ -6,6 +6,7 @@
   <title>Dock Finder: hands-free bike share docking</title>
   <meta name="description" content="Dock Finder checks live dock availability as you ride and tells you where to dock before you arrive, out loud, with your phone locked in your pocket.">
   <meta name="theme-color" content="#0b2a5e">
+  <meta name="apple-itunes-app" content="app-id=6823327404">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Dock Finder">
   <meta property="og:description" content="Never circle a full bike share station again. Dock Finder tells you where to dock before you arrive.">
@@ -113,8 +114,6 @@
     .btn-store svg { width: 20px; height: 20px; }
     .btn-store small { display: block; font-size: 11px; font-weight: 500; opacity: .8; line-height: 1.1; }
     .btn-store span { line-height: 1.15; }
-    .btn-store[aria-disabled="true"] { cursor: default; }
-    .btn-store[aria-disabled="true"]:hover { transform: none; }
     .btn-ghost { color: #fff; border: 1px solid rgba(255,255,255,.35); }
     .btn-ghost:hover { background: rgba(255,255,255,.1); }
 
@@ -257,14 +256,9 @@
           <h1>Never circle a full dock again.</h1>
           <p class="lede">Dock Finder checks live dock availability as you ride and tells you where to dock before you arrive. Out loud, with your phone locked in your pocket.</p>
           <div class="ctas">
-            <!--
-              App Store button. While the app isn't live it's shown as "Coming soon".
-              Once it is: set href to the App Store link, delete aria-disabled,
-              and change the small text to "Download on the".
-            -->
-            <a class="btn btn-store" aria-disabled="true">
+            <a class="btn btn-store" href="https://apps.apple.com/us/app/dock-finder/id6823327404">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.87 2.3 1.15-.05 1.58-.75 2.97-.75 1.39 0 1.78.75 3 .72 1.24-.02 2.02-1.12 2.78-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.67zM14.08 5.85c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
-              <span><small>Coming soon to the</small>App Store</span>
+              <span><small>Download on the</small>App Store</span>
             </a>
             <a class="btn btn-ghost" href="#how">See how it works</a>
           </div>
@@ -398,9 +392,9 @@
         <h2>Ride to the dock that has room.</h2>
         <p>Dock Finder is for iPhone. Questions or feedback? We'd love to hear from you.</p>
         <div class="ctas">
-          <a class="btn btn-store" aria-disabled="true">
+          <a class="btn btn-store" href="https://apps.apple.com/us/app/dock-finder/id6823327404">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.76 2.27-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.87 2.3 1.15-.05 1.58-.75 2.97-.75 1.39 0 1.78.75 3 .72 1.24-.02 2.02-1.12 2.78-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.67zM14.08 5.85c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
-            <span><small>Coming soon to the</small>App Store</span>
+            <span><small>Download on the</small>App Store</span>
           </a>
           <a class="btn btn-ghost" href="https://docs.google.com/document/d/1O2KP8ZIn-s7UkUS4sUY_UhSqI4v7Kb4KQa7qM4s_ik0/view">Get support</a>
         </div>
