@@ -14,6 +14,10 @@ When the app is live, swap the two "Coming soon to the App Store" buttons in `in
 
 ## Hosting: Cloudflare Pages
 
+**Live at https://dockfinder-3so.pages.dev** (Cloudflare Pages project `dockfinder`; `dockfinder.pages.dev` was taken, so Cloudflare added the `-3so` suffix).
+
+It's already set up: root directory `site`, no build command, production branch `main`, build watch paths `site/*`. Branch pushes that touch `site/` get their own preview link. The steps below are for reference, or for setting it up again from scratch.
+
 Cloudflare Pages deploys this folder straight from the GitHub repo through its own GitHub app, so there's no GitHub Actions workflow for the site. It keeps working if the repo goes private.
 
 One-time setup, in the Cloudflare dashboard:
