@@ -14,7 +14,7 @@ The two "Download on the App Store" buttons link to https://apps.apple.com/us/ap
 
 ## Hosting: Cloudflare Pages
 
-**Live at https://dockfinder-3so.pages.dev** (Cloudflare Pages project `dockfinder`; `dockfinder.pages.dev` was taken, so Cloudflare added the `-3so` suffix).
+**Live at https://getdockfinder.com** (also `www.getdockfinder.com`). It's the Cloudflare Pages project `dockfinder`, whose own address is https://dockfinder-3so.pages.dev: `dockfinder.pages.dev` was taken, so Cloudflare added the `-3so` suffix.
 
 It's already set up: root directory `site`, no build command, production branch `main`, build watch paths `site/*`. Branch pushes that touch `site/` get their own preview link. The steps below are for reference, or for setting it up again from scratch.
 
@@ -35,7 +35,9 @@ One-time setup, in the Cloudflare dashboard:
 
 ### Custom domain
 
-**Custom domains → Set up a custom domain** on the Pages project. Domains and HTTPS are free; you only pay for the domain name.
+`getdockfinder.com` is registered through Cloudflare Registrar in the same Cloudflare account, renewing automatically each year (next renewal Nov 19, 2027). Its DNS is on Cloudflare, and both `getdockfinder.com` and `www.getdockfinder.com` are custom domains on the Pages project, each a proxied CNAME to `dockfinder-3so.pages.dev`. Cloudflare issues and renews the HTTPS certificates.
+
+To add another domain: **Custom domains → Set up a custom domain** on the Pages project. Custom domains and HTTPS are free; you only pay for the domain name.
 
 - A subdomain such as `www.example.app` works with DNS anywhere: add the CNAME record Cloudflare shows.
 - A bare domain such as `example.app` needs its DNS on Cloudflare: automatic if bought through Cloudflare Registrar, otherwise switch the domain's nameservers to Cloudflare (free).
