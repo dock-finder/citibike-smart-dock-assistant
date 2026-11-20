@@ -6,9 +6,10 @@
 //  if they never started a ride. iOS watches a circle (geofence) around
 //  each saved place at its alert distance and wakes Dock Finder when the
 //  rider crosses into one, even if the app wasn't running. The app then
-//  speaks the dock answer and posts it as a notification, however the
-//  rider arrived. (A check that they were biking, not walking or on the
-//  subway, is switched off: see PlaceArrivalRules.requiresCycling.)
+//  checks that they were actually biking (not walking or on the subway),
+//  speaks the dock answer and posts it as a notification. Arrivals still
+//  alert when motion data isn't available (Motion & Fitness denied, or the
+//  phone can't tell): see PlaceArrivalRules.requiresCycling.
 //
 //  Needs Always location access, and a service session that says so (see
 //  updateServiceSession): without one, iOS treats the geofences as While
@@ -279,7 +280,7 @@ final class PlaceArrivalMonitor {
 }
 
 /// Whether the rider is on a bike, from the phone's motion coprocessor.
-/// Arrival alerts only ask when PlaceArrivalRules.requiresCycling is on.
+/// Arrival alerts ask this while PlaceArrivalRules.requiresCycling is on.
 nonisolated enum MotionCheck {
     /// `nil` when iOS can't say: no motion hardware, or Motion & Fitness
     /// access is off.

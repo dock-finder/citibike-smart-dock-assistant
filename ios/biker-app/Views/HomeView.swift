@@ -144,8 +144,8 @@ struct HomeView: View {
         }
         .task {
             // For riders who finished onboarding before arrival alerts
-            // existed. iOS only ever shows this once. Arrival alerts only
-            // use it while PlaceArrivalRules.requiresCycling is on.
+            // existed. iOS only ever shows this once. Arrival alerts use it
+            // to skip walking and the subway.
             await MotionCheck.requestPermission()
             // Arrival alerts also arrive as notifications. Asked here, on
             // screen, since a ride started with Siri can't show the prompt.
