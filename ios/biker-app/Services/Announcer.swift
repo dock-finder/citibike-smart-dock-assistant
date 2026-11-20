@@ -190,12 +190,12 @@ extension SystemSpeechSynthesizer: AVSpeechSynthesizerDelegate {
 }
 
 /// How Dock Finder sounds when it speaks on its own (ride alerts and
-/// directions). Siri's replies use Siri's voice; for the app's own speech,
-/// iOS doesn't hand out Siri's voice directly, so this picks the closest
-/// one available: a Siri voice if the system lists one, otherwise the
-/// best-quality male voice for the phone's language. Downloading an
-/// "Enhanced" or "Premium" male voice in Settings › Accessibility ›
-/// Spoken Content › Voices makes it sound better.
+/// directions). Siri's replies use Siri's voice, but apps can't use it, and
+/// apps can't download voices. So the app speaks in Samantha, which ships
+/// on essentially every iPhone (riders don't need to download anything);
+/// a downloaded "Samantha (Enhanced)" is used when present. Without
+/// Samantha it picks the most natural-sounding voice on the phone, never
+/// the robotic legacy or novelty ones.
 enum SpokenVoice {
     /// The default rate (0.5) sounds rushed for directions on a bike.
     static let rate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.88
@@ -219,21 +219,86 @@ enum SpokenVoice {
         text.replacingOccurrences(of: #"\be-?bike"#, with: "E bike", options: [.regularExpression, .caseInsensitive])
     }
 
-    /// Prefers, in order: male, a Siri voice, then Premium over Enhanced
-    /// over the basic quality. Novelty voices never win.
+    /// What the ranking needs to know about a voice, so it can be tested
+    /// without real `AVSpeechSynthesisVoice` objects.
+    struct Candidate: Equatable {
+        enum Quality: Int, Comparable {
+            case standard, enhanced, premium
+            static func < (a: Quality, b: Quality) -> Bool { a.rawValue < b.rawValue }
+        }
+        var name: String
+        var identifier: String
+        var language: String
+        var quality: Quality
+        var isMale: Bool
+        var isNovelty: Bool
+
+        init(name: String, identifier: String, language: String,
+             quality: Quality = .standard, isMale: Bool = false, isNovelty: Bool = false) {
+            self.name = name
+            self.identifier = identifier
+            self.language = language
+            self.quality = quality
+            self.isMale = isMale
+            self.isNovelty = isNovelty
+        }
+
+        init(_ voice: AVSpeechSynthesisVoice) {
+            let quality: Quality
+            switch voice.quality {
+            case .premium: quality = .premium
+            case .enhanced: quality = .enhanced
+            default: quality = .standard
+            }
+            self.init(
+                name: voice.name,
+                identifier: voice.identifier,
+                language: voice.language,
+                quality: quality,
+                isMale: voice.gender == .male,
+                isNovelty: voice.voiceTraits.contains(.isNoveltyVoice)
+            )
+        }
+
+        /// iOS may report the voice as "Samantha", "Samantha (Enhanced)" or
+        /// "Samantha (Premium)"; its identifier ends in ".Samantha".
+        var isSamantha: Bool {
+            name == "Samantha" || name.hasPrefix("Samantha (") || identifier.split(separator: ".").last == "Samantha"
+        }
+
+        /// The old MacinTalk voices (Fred, Ralph, Junior...) and the
+        /// Eloquence set (Eddy, Reed, Rocko, Grandpa...) sound robotic.
+        var isRobotic: Bool {
+            identifier.hasPrefix("com.apple.speech.synthesis.voice.")
+                || identifier.contains("com.apple.eloquence.")
+        }
+    }
+
+    /// Picks Samantha when she's there, looking among en-US voices whatever
+    /// the phone's language (everything the app says is English); the
+    /// highest quality one if several are installed (a downloaded
+    /// "Samantha (Enhanced)" beats the built-in one). Otherwise, among the
+    /// phone's language: novelty, legacy MacinTalk and Eloquence voices only
+    /// if nothing else exists; then Premium over Enhanced over the basic
+    /// quality; then a Siri voice; then male as a tiebreaker only.
     static func pickVoice(from voices: [AVSpeechSynthesisVoice], language: String) -> AVSpeechSynthesisVoice? {
+        let candidates = voices.map(Candidate.init)
+        guard let picked = pickCandidate(from: candidates, language: language) else { return nil }
+        return voices.first { $0.identifier == picked.identifier }
+    }
+
+    static func pickCandidate(from voices: [Candidate], language: String) -> Candidate? {
+        if let samantha = voices.filter({ $0.isSamantha && $0.language == "en-US" }).max(by: { $0.quality < $1.quality }) {
+            return samantha
+        }
         let exact = voices.filter { $0.language == language }
         let candidates = exact.isEmpty ? voices.filter { $0.language.hasPrefix(String(language.prefix(2))) } : exact
-        func score(_ voice: AVSpeechSynthesisVoice) -> Int {
+        func score(_ voice: Candidate) -> Int {
             var score = 0
-            if voice.gender == .male { score += 100 }
-            if voice.identifier.lowercased().contains("siri") { score += 50 }
-            switch voice.quality {
-            case .premium: score += 20
-            case .enhanced: score += 10
-            default: break
-            }
-            if voice.voiceTraits.contains(.isNoveltyVoice) { score -= 1_000 }
+            if voice.isNovelty || voice.isRobotic { score -= 10_000 }
+            score += voice.quality.rawValue * 100
+            if voice.identifier.lowercased().contains("siri") { score += 10 }
+            if voice.isMale { score += 1 }
             return score
         }
         return candidates.max { score($0) < score($1) }
