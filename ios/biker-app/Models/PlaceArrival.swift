@@ -2,7 +2,7 @@
 //  PlaceArrival.swift
 //  Dock Finder
 //
-//  When arriving at a saved place should trigger a "where to dock" alert,
+//  When biking up to a saved place should trigger a "where to dock" alert,
 //  without a ride having been started. PlaceArrivalMonitor applies these
 //  rules to geofence events; they're plain logic so they can be tested.
 //
@@ -12,11 +12,12 @@ import Foundation
 
 nonisolated enum PlaceArrivalRules {
     /// Whether an arrival only alerts when the rider was biking (the motion
-    /// check below). Off: every arrival alerts, however the rider got there,
-    /// because a false alert costs less than a missed one. Set to `true` to
-    /// go back to skipping walking and the subway; the motion check, its
-    /// tests and the Motion & Fitness prompt are all still in place.
-    static let requiresCycling = false
+    /// check below, the same detection Apple's Fitness app uses). On:
+    /// walking up to a place or arriving by subway is skipped. It still
+    /// alerts when motion data isn't available (Motion & Fitness denied,
+    /// no motion hardware, or the query failed), rather than never firing.
+    /// Set to `false` to alert on every arrival, however the rider got there.
+    static let requiresCycling = true
 
     /// At most one alert per place in this long, so circling the block or
     /// a GPS wobble at the geofence's edge doesn't repeat it.

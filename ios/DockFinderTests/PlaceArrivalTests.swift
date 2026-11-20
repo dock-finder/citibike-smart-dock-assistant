@@ -2,9 +2,9 @@
 //  PlaceArrivalTests.swift
 //  DockFinderTests
 //
-//  Alerts when arriving at a saved place without a ride: on every arrival
-//  while the biking check is switched off (only on a bike when it's on),
-//  not twice in an hour, and not on top of a ride or directions.
+//  Alerts when arriving at a saved place without a ride: only on a bike
+//  (or when motion data isn't available), not twice in an hour, and not on
+//  top of a ride or directions.
 //
 
 import CoreLocation
@@ -43,8 +43,7 @@ struct PlaceArrivalRuleTests {
         #expect(!PlaceArrivalRules.wasCycling([], now: referenceNow))
     }
 
-    /// With the biking check on (`requiresCycling: true`), as it was
-    /// before every arrival alerted.
+    /// With the biking check on (`requiresCycling: true`), as shipped.
     private func shouldAlert(
         enabled: Bool = true,
         busy: Bool = false,
@@ -428,18 +427,41 @@ struct PlaceArrivalCooldownTests {
         func bump() { count += 1 }
     }
 
-    @Test func motionIsCheckedOnlyWithTheBikingCheckOn() async {
+    @Test func bikingCheckIsOnInThisBuild() {
+        #expect(PlaceArrivalRules.requiresCycling)
+    }
+
+    /// Runs one arrival through the monitor with the given motion answer
+    /// and returns what was spoken and how many times motion was queried.
+    private func arrival(cycling: Bool?) async -> (spoken: [String], motionChecks: Int) {
         let world = World()
         let motionChecks = Counter()
         let monitor = PlaceArrivalMonitor(
             defaults: defaults, now: { world.now }, isBusy: { false },
-            wasCycling: { _ in await motionChecks.bump(); return false },
+            wasCycling: { _ in await motionChecks.bump(); return cycling },
             lookUp: { _ in Self.answer },
             announce: { text, _ in world.spoken.append(text) }, notifyQuietly: { _, _ in }, log: { _, _ in }
         )
         await monitor.handleArrival(at: place)
-        #expect(await motionChecks.count == (PlaceArrivalRules.requiresCycling ? 1 : 0))
-        #expect(world.spoken.count == (PlaceArrivalRules.requiresCycling ? 0 : 1))
+        return (world.spoken, await motionChecks.count)
+    }
+
+    @Test func cyclingArrivalAlerts() async {
+        let result = await arrival(cycling: true)
+        #expect(result.spoken == [Self.answer])
+        #expect(result.motionChecks == 1)
+    }
+
+    @Test func walkingOrTransitArrivalIsSkipped() async {
+        let result = await arrival(cycling: false)
+        #expect(result.spoken.isEmpty)
+        #expect(result.motionChecks == 1)
+    }
+
+    @Test func arrivalAlertsWhenMotionIsUnavailable() async {
+        let result = await arrival(cycling: nil)
+        #expect(result.spoken == [Self.answer])
+        #expect(result.motionChecks == 1)
     }
 }
 

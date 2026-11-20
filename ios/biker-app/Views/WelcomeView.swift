@@ -90,8 +90,7 @@ struct WelcomeView: View {
         isRequesting = true
         Task {
             let status = await LocationService.shared.requestAlwaysAuthorizationFromStart()
-            // Lets saved-place arrival alerts skip walking and the subway,
-            // while PlaceArrivalRules.requiresCycling is on.
+            // Lets saved-place arrival alerts skip walking and the subway.
             await MotionCheck.requestPermission()
             await PlaceArrivalMonitor.shared.sync()
             isRequesting = false

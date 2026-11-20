@@ -40,11 +40,10 @@ Arrive at a saved place (school, work, home) and Dock Finder tells you where to 
 
 > "Your usual dock is full. Go to Washington and Greene, 8 docks, 350 feet from school. For directions, say: Hey Siri, ask Dock Finder to direct me."
 
-- It speaks up on **every arrival**, however you get there: biking, walking, driving or the subway. We'd rather it speak up when you didn't need it than stay quiet when you did.
+- It only speaks up when you were **biking**, using the iPhone's motion sensor (**Motion & Fitness**, the same detection the Fitness app uses). Walking up to a place or arriving by subway doesn't trigger it. If the iPhone can't tell (Motion & Fitness is off, say), it speaks up anyway.
 - At most once an hour per place, and not while a ride or directions are already running. If it can't get an answer (no signal, say), it tells you why instead, and that doesn't count: arriving again tries again. So a dead zone or an outage doesn't keep repeating the error, it's spoken at most once every 3 minutes and 3 times an hour per place; otherwise it only shows as a silent notification. A real answer, even "No docks with space near school", does count.
 - Saving a place, moving or enlarging it, or turning its alert on while you're standing inside its circle doesn't alert right away, if the iPhone knows where you were in the last couple of minutes. Leaving and coming back does.
 - Triggers at each place's alert radius (the circle on its map, see Saved Places below), and needs location access set to **Always**. Without it, the screen of each place with the alert on, and the home screen's Saved Places card, say so, with a button to allow it.
-- A check that only lets it speak up when you're biking (using the iPhone's motion sensor and **Motion & Fitness**) is still in the app but switched off. The app still asks for Motion & Fitness so the check can be switched back on.
 - Turn it off per place with **Alert Me When I Arrive** on the place's screen.
 
 ### Directions to the dock
@@ -114,7 +113,7 @@ Siri can only fill in names the app gives it ahead of time (saved places and tho
 
 ## Using the app
 
-The first time it opens, tap **Enable Dock Finder with Siri**. iOS asks about location twice: choose **Allow While Using App**, then **Change to Always Allow** (iOS never offers "Always" in the first question), so rides and directions work with the phone locked. iOS then asks for **Motion & Fitness** (for the arrival alerts' biking check, which is switched off for now, so either answer is fine). Then it asks whether to **share usage data** with the Dock Finder team (see [Privacy and usage data](#privacy-and-usage-data)), has you **add your first place** (school, work or home: search the address or use where you are, name it, pick how far out to be alerted; Continue stays off until one is saved, and places restored after reinstalling count), and shows the Siri cheat sheet. After that, the home screen has:
+The first time it opens, tap **Enable Dock Finder with Siri**. iOS asks about location twice: choose **Allow While Using App**, then **Change to Always Allow** (iOS never offers "Always" in the first question), so rides and directions work with the phone locked. iOS then asks for **Motion & Fitness** (so arrival alerts can skip walking and the subway; if you decline, they speak up on every arrival). Then it asks whether to **share usage data** with the Dock Finder team (see [Privacy and usage data](#privacy-and-usage-data)), has you **add your first place** (school, work or home: search the address or use where you are, name it, pick how far out to be alerted; Continue stays off until one is saved, and places restored after reinstalling count), and shows the Siri cheat sheet. After that, the home screen has:
 
 - **Find Nearest Dock**: the answer, with a **Direct Me** button for spoken turn-by-turn directions. Every dock answer in the app has **Direct Me**.
 - **Directions card**: while directions run, the next turn, the dock and its open docks, and **Stop Directions**.
