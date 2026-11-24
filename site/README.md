@@ -10,7 +10,7 @@ python3 -m http.server 8000 --directory site
 
 Then open http://localhost:8000.
 
-The two "Download on the App Store" buttons link to https://apps.apple.com/us/app/dock-finder/id6823327404, and the `apple-itunes-app` meta tag (app ID `6823327404`) shows Safari's Smart App Banner on iPhone.
+The two App Store buttons ("Sign up for only $0.99", a pricing test: the app itself is still free) link to https://apps.apple.com/us/app/dock-finder/id6823327404, and the `apple-itunes-app` meta tag (app ID `6823327404`) shows Safari's Smart App Banner on iPhone.
 
 ## Hosting: Cloudflare Pages
 
