@@ -447,7 +447,7 @@ final class VoicePrompter {
         starting = Task { [weak self] in
             await previous?.value
             guard let self, await self.claimAudio() else { return }
-            self.synthesizer.speak(text) { [weak self] in self?.releaseAudioIfIdle() }
+            self.synthesizer.speak(text) { [weak self] _ in self?.releaseAudioIfIdle() }
         }
     }
 

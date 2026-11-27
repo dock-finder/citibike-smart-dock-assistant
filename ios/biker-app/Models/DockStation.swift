@@ -56,6 +56,11 @@ nonisolated struct Destination: Codable, Sendable, Equatable, Hashable {
 
 /// What every feature hands to Siri and the UI.
 nonisolated struct DockAnswer: Sendable, Equatable {
+    func redirects(from usualStationID: String?) -> Bool {
+        guard let usualStationID, let station else { return false }
+        return station.id != usualStationID
+    }
+
     enum Source: Sendable, Equatable {
         /// Plain on-device logic over Citi Bike's live feed.
         case onDevice

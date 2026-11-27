@@ -30,12 +30,18 @@ final class PlaceArrivalMonitor {
     /// because each arrival may be a fresh background launch.
     private static let spokenFailuresKey = "placeArrivalSpokenFailures"
 
+    struct ArrivalAnswer {
+        let text: String
+        var redirectsFromUsualDock = false
+    }
+
     private let defaults: UserDefaults
+    private let reviewPrompt: ReviewPrompt
     private let now: @MainActor () -> Date
     private let isBusy: @MainActor () -> Bool
     private let wasCycling: @Sendable (Date) async -> Bool?
-    private let lookUp: @MainActor (SavedPlace) async throws -> String
-    private let announce: @MainActor (_ text: String, _ title: String) async -> Void
+    private let lookUp: @MainActor (SavedPlace) async throws -> ArrivalAnswer
+    private let announce: @MainActor (_ text: String, _ title: String, _ onSpoken: () -> Void) async -> Void
     private let notifyQuietly: @MainActor (_ text: String, _ title: String) async -> Void
     private let log: @MainActor (_ event: String, _ details: [String: String]) -> Void
     /// Shared so concurrent syncs never create two monitors with the same
@@ -56,19 +62,20 @@ final class PlaceArrivalMonitor {
         now: (@MainActor () -> Date)? = nil,
         isBusy: (@MainActor () -> Bool)? = nil,
         wasCycling: (@Sendable (Date) async -> Bool?)? = nil,
-        lookUp: (@MainActor (SavedPlace) async throws -> String)? = nil,
-        announce: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil,
+        lookUp: (@MainActor (SavedPlace) async throws -> ArrivalAnswer)? = nil,
+        announce: (@MainActor (_ text: String, _ title: String, _ onSpoken: () -> Void) async -> Void)? = nil,
         notifyQuietly: (@MainActor (_ text: String, _ title: String) async -> Void)? = nil,
         log: (@MainActor (_ event: String, _ details: [String: String]) -> Void)? = nil
     ) {
         self.defaults = defaults
+        self.reviewPrompt = ReviewPrompt(defaults: defaults)
         self.now = now ?? { .now }
         self.isBusy = isBusy ?? { RideTracker.shared.currentRide != nil || GuidanceSession.shared.isActive }
         self.wasCycling = wasCycling ?? { await MotionCheck.wasCycling(now: $0) }
         self.lookUp = lookUp ?? { try await Self.liveAnswer(for: $0) }
         self.log = log ?? { Metrics.shared.log($0, details: $1) }
         let announcer = announce == nil || notifyQuietly == nil ? Announcer() : nil
-        self.announce = announce ?? { await announcer?.announce($0, title: $1) }
+        self.announce = announce ?? { await announcer?.announce($0, title: $1, onSpoken: $2) }
         self.notifyQuietly = notifyQuietly ?? { await announcer?.notifyQuietly($0, title: $1) }
     }
 
@@ -184,14 +191,18 @@ final class PlaceArrivalMonitor {
         }
 
         let title = "Arriving at \(place.name)"
-        let text: String
+        let answer: ArrivalAnswer
         do {
-            text = try await lookUp(place)
+            answer = try await lookUp(place)
         } catch {
             await reportFailure(error, at: place, title: title)
             return
         }
-        await announce(text, title)
+        await announce(answer.text, title) {
+            if answer.redirectsFromUsualDock {
+                reviewPrompt.recordSpokenRedirect()
+            }
+        }
         // Only once the answer was given, so an arrival cut off mid-lookup
         // doesn't silence the place either.
         recordAlert(for: place.id, at: self.now())
@@ -216,12 +227,12 @@ final class PlaceArrivalMonitor {
             await notifyQuietly(text, title)
             return
         }
-        await announce(text, title)
+        await announce(text, title, {})
         setSpokenFailures(earlier + [now], for: place.id)
     }
 
     /// The dock answer for `place`, logged and offered for directions.
-    private static func liveAnswer(for place: SavedPlace) async throws -> String {
+    private static func liveAnswer(for place: SavedPlace) async throws -> ArrivalAnswer {
         let result = try await DockFinderService.live.findDock(for: place)
         let answer = result.answer
         var text = answer.text
@@ -244,7 +255,7 @@ final class PlaceArrivalMonitor {
                 text += " For directions, say: Hey Siri, ask Dock Finder to direct me."
             }
         }
-        return text
+        return ArrivalAnswer(text: text, redirectsFromUsualDock: answer.redirects(from: place.usualStationID))
     }
 
     /// When the place last got a dock answer (its cooldown's start), if ever.

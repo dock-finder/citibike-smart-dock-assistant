@@ -222,7 +222,7 @@ struct PlaceArrivalCooldownTests {
         func advance(minutes: Double) { now = now.addingTimeInterval(minutes * 60) }
     }
 
-    private func monitor(_ world: World, lookUp: @escaping @MainActor (SavedPlace) async throws -> String) -> PlaceArrivalMonitor {
+    private func monitor(_ world: World, lookUp: @escaping @MainActor (SavedPlace) async throws -> PlaceArrivalMonitor.ArrivalAnswer) -> PlaceArrivalMonitor {
         PlaceArrivalMonitor(
             defaults: defaults,
             now: { world.now },
@@ -230,10 +230,24 @@ struct PlaceArrivalCooldownTests {
             // Riding up, so these hold with the biking check on or off.
             wasCycling: { _ in true },
             lookUp: lookUp,
-            announce: { text, _ in world.spoken.append(text) },
+            announce: { text, _, _ in world.spoken.append(text) },
             notifyQuietly: { text, _ in world.quiet.append(text) },
             log: { world.logged.append(($0, $1)) }
         )
+    }
+
+    @Test(arguments: [true, false], [true, false])
+    func onlyASpokenRedirectQualifies(redirects: Bool, spoken: Bool) async {
+        let world = World()
+        let monitor = PlaceArrivalMonitor(
+            defaults: defaults, now: { world.now }, isBusy: { false },
+            wasCycling: { _ in true },
+            lookUp: { _ in .init(text: Self.answer, redirectsFromUsualDock: redirects) },
+            announce: { _, _, onSpoken in if spoken { onSpoken() } },
+            notifyQuietly: { _, _ in }, log: { _, _ in }
+        )
+        await monitor.handleArrival(at: place)
+        #expect(ReviewPrompt(defaults: defaults).state == (redirects && spoken ? .pendingReview : .notEligible))
     }
 
     @Test(arguments: [DockFinderError.networkUnavailable, .locationUnavailable, .serviceUnavailable(statusCode: 503)])
@@ -256,7 +270,7 @@ struct PlaceArrivalCooldownTests {
     @Test(arguments: [PlaceArrivalCooldownTests.answer, "No docks with space near School."])
     func aDockAnswerStartsTheCooldown(answer: String) async {
         let world = World()
-        let monitor = monitor(world) { _ in answer }
+        let monitor = monitor(world) { _ in .init(text: answer) }
         await monitor.handleArrival(at: place)
         #expect(world.spoken == [answer])
         #expect(monitor.lastAlert(for: place.id) == world.now)
@@ -274,7 +288,7 @@ struct PlaceArrivalCooldownTests {
         let world = World()
         let monitor = monitor(world) { _ in
             if world.lookupFails { throw DockFinderError.networkUnavailable }
-            return Self.answer
+            return .init(text: Self.answer)
         }
         await monitor.handleArrival(at: place)
         world.lookupFails = false
@@ -353,7 +367,7 @@ struct PlaceArrivalCooldownTests {
     @Test func aLateArrivalIsLoggedNotSpoken() async {
         let world = World()
         var lookups = 0
-        let monitor = monitor(world) { _ in lookups += 1; return Self.answer }
+        let monitor = monitor(world) { _ in lookups += 1; return .init(text: Self.answer) }
         await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-40 * 60))
         #expect(world.spoken.isEmpty)
         #expect(world.quiet.isEmpty)
@@ -366,14 +380,14 @@ struct PlaceArrivalCooldownTests {
 
     @Test func anArrivalAFewMinutesOldIsStillSpoken() async {
         let world = World()
-        let monitor = monitor(world) { _ in Self.answer }
+        let monitor = monitor(world) { _ in .init(text: Self.answer) }
         await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-2 * 60))
         #expect(world.spoken == [Self.answer])
     }
 
     @Test func aLateArrivalInTheCooldownLogsNothing() async {
         let world = World()
-        let monitor = monitor(world) { _ in Self.answer }
+        let monitor = monitor(world) { _ in .init(text: Self.answer) }
         await monitor.handleArrival(at: place)
         world.advance(minutes: 20)
         await monitor.handleArrival(at: place, occurredAt: world.now.addingTimeInterval(-15 * 60))
@@ -383,7 +397,7 @@ struct PlaceArrivalCooldownTests {
 
     @Test func anAnswerLogsNoFailure() async {
         let world = World()
-        await monitor(world) { _ in Self.answer }.handleArrival(at: place)
+        await monitor(world) { _ in .init(text: Self.answer) }.handleArrival(at: place)
         #expect(world.logged.isEmpty)
     }
 
@@ -394,7 +408,7 @@ struct PlaceArrivalCooldownTests {
         let monitor = monitor(world) { _ in
             lookups += 1
             await withCheckedContinuation { release = $0 }
-            return Self.answer
+            return .init(text: Self.answer)
         }
         let first = Task { await monitor.handleArrival(at: place) }
         while release == nil { await Task.yield() }
@@ -412,7 +426,7 @@ struct PlaceArrivalCooldownTests {
         let gym = SavedPlace(name: "Gym", latitude: 40.74, longitude: -73.99)
         let monitor = monitor(world) { place in
             if place.name == "Gym" { throw DockFinderError.networkUnavailable }
-            return Self.answer
+            return .init(text: Self.answer)
         }
         await monitor.handleArrival(at: place)
         await monitor.handleArrival(at: gym)
@@ -439,8 +453,8 @@ struct PlaceArrivalCooldownTests {
         let monitor = PlaceArrivalMonitor(
             defaults: defaults, now: { world.now }, isBusy: { false },
             wasCycling: { _ in await motionChecks.bump(); return cycling },
-            lookUp: { _ in Self.answer },
-            announce: { text, _ in world.spoken.append(text) }, notifyQuietly: { _, _ in }, log: { _, _ in }
+            lookUp: { _ in .init(text: Self.answer) },
+            announce: { text, _, _ in world.spoken.append(text) }, notifyQuietly: { _, _ in }, log: { _, _ in }
         )
         await monitor.handleArrival(at: place)
         return (world.spoken, await motionChecks.count)

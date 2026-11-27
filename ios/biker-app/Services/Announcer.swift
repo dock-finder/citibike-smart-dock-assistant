@@ -26,7 +26,7 @@ final class Announcer {
     private let postRequest: (UNNotificationRequest) async -> Void
 
     /// What's being said now, and the caller waiting for it to finish.
-    private var current: (ticket: Int, finished: CheckedContinuation<Void, Never>)?
+    private var current: (ticket: Int, finished: CheckedContinuation<Bool, Never>)?
     /// Bumped by every request to speak, so the newest one wins.
     private var latestTicket = 0
 
@@ -49,9 +49,13 @@ final class Announcer {
     /// Speaks first, then posts the notification: quietly when it was
     /// spoken (so Siri's Announce Notifications doesn't read it out over
     /// the app's voice, or get cut off by it), as an alert when it wasn't.
-    func announce(_ text: String, title: String, notificationID: String = arrivalNotificationID) async {
-        let spoken = await speak(text)
-        await postNotification(text, title: title, identifier: notificationID, quietly: spoken)
+    func announce(
+        _ text: String, title: String, notificationID: String = arrivalNotificationID,
+        onSpoken: () -> Void = {}
+    ) async {
+        let speech = await speak(text)
+        if speech.completed { onSpoken() }
+        await postNotification(text, title: title, identifier: notificationID, quietly: speech.suppressesFallback)
     }
 
     /// Posts `text` as a notification without speaking it or making a
@@ -64,7 +68,7 @@ final class Announcer {
     /// notification is only a fallback here, posted if audio can't start,
     /// so AirPods with Announce Notifications on don't say it twice.
     func speakAnswer(_ text: String, title: String, notificationID: String) async {
-        if await !speak(text) {
+        if await !speak(text).suppressesFallback {
             await postNotification(text, title: title, identifier: notificationID)
         }
     }
@@ -72,34 +76,35 @@ final class Announcer {
     /// One answer at a time, and the newest wins: asking again (a second
     /// press of the Action Button) stops what's being said straight away
     /// and lets its caller return, then says the new answer. Returns
-    /// `false` if audio couldn't start, so nothing was said.
+    /// whether the existing notification fallback should be suppressed and
+    /// whether the utterance reached its end.
     @discardableResult
-    private func speak(_ text: String) async -> Bool {
+    private func speak(_ text: String) async -> (suppressesFallback: Bool, completed: Bool) {
         latestTicket += 1
         let ticket = latestTicket
         interrupt()
         // The notification still carries the answer if audio can't start.
-        guard await audio.acquire() else { return false }
+        guard await audio.acquire() else { return (false, false) }
         defer { audio.release() }
         // A newer answer arrived while audio was starting; it speaks instead.
-        guard ticket == latestTicket else { return true }
-        await withCheckedContinuation { continuation in
+        guard ticket == latestTicket else { return (true, false) }
+        let completed = await withCheckedContinuation { continuation in
             current = (ticket, continuation)
-            synthesizer.speak(text) { [weak self] in self?.finish(ticket) }
+            synthesizer.speak(text) { [weak self] completed in self?.finish(ticket, completed: completed) }
             let timeout = speechTimeout
             Task { [weak self] in
                 try? await Task.sleep(for: timeout)
-                self?.finish(ticket)
+                self?.finish(ticket, completed: false)
             }
         }
-        return true
+        return (true, completed)
     }
 
     /// Ends the wait for `ticket`, if it's still the one being said.
-    private func finish(_ ticket: Int) {
+    private func finish(_ ticket: Int, completed: Bool) {
         guard let current, current.ticket == ticket else { return }
         self.current = nil
-        current.finished.resume()
+        current.finished.resume(returning: completed)
     }
 
     /// Stops what's being said now and lets its caller return.
@@ -107,7 +112,7 @@ final class Announcer {
         guard let current else { return }
         self.current = nil
         synthesizer.stopSpeaking()
-        current.finished.resume()
+        current.finished.resume(returning: false)
     }
 
     /// Asks to send notifications, once, and only while the app is on
@@ -137,8 +142,8 @@ final class Announcer {
 protocol SpeechSynthesizing: AnyObject {
     var isSpeaking: Bool { get }
     /// Queues `text` after anything already being said, and calls `done`
-    /// once when it has been said or stopped.
-    func speak(_ text: String, done: @escaping () -> Void)
+    /// with true when it has been said and false when it was stopped.
+    func speak(_ text: String, done: @escaping (Bool) -> Void)
     /// Stops at once; everything queued reports done.
     func stopSpeaking()
 }
@@ -150,7 +155,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
     private var created: AVSpeechSynthesizer?
     /// Who to tell when each queued utterance is done. Holding the
     /// utterance keeps its identifier from being reused meanwhile.
-    private var pending: [ObjectIdentifier: (utterance: AVSpeechUtterance, done: () -> Void)] = [:]
+    private var pending: [ObjectIdentifier: (utterance: AVSpeechUtterance, done: (Bool) -> Void)] = [:]
 
     private var synthesizer: AVSpeechSynthesizer {
         if let created { return created }
@@ -162,7 +167,7 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
 
     var isSpeaking: Bool { created?.isSpeaking ?? false }
 
-    func speak(_ text: String, done: @escaping () -> Void) {
+    func speak(_ text: String, done: @escaping (Bool) -> Void) {
         let utterance = SpokenVoice.utterance(text)
         pending[ObjectIdentifier(utterance)] = (utterance, done)
         synthesizer.speak(utterance)
@@ -172,20 +177,20 @@ final class SystemSpeechSynthesizer: NSObject, SpeechSynthesizing {
         created?.stopSpeaking(at: .immediate)
     }
 
-    private func finished(_ id: ObjectIdentifier) {
-        pending.removeValue(forKey: id)?.done()
+    private func finished(_ id: ObjectIdentifier, completed: Bool) {
+        pending.removeValue(forKey: id)?.done(completed)
     }
 }
 
 extension SystemSpeechSynthesizer: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         let id = ObjectIdentifier(utterance)
-        Task { @MainActor in self.finished(id) }
+        Task { @MainActor in self.finished(id, completed: true) }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         let id = ObjectIdentifier(utterance)
-        Task { @MainActor in self.finished(id) }
+        Task { @MainActor in self.finished(id, completed: false) }
     }
 }
 
