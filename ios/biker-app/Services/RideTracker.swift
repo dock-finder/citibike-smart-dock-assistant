@@ -217,7 +217,7 @@ final class RideTracker: RideControlling {
 
         let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Ride arrival")
         // A separate task, so cancelling the tracking tasks can't cancel it.
-        let answer = await Task { await Self.arrivalAnswer(for: ride) }.value
+        let (answer, redirectsFromUsualDock) = await Task { await Self.arrivalAnswer(for: ride) }.value
         lastArrival = RideArrival(destination: ride.destination.name, answer: answer, date: .now)
         let here = LocationService.shared.lastKnownLocation
         Metrics.shared.log(
@@ -229,7 +229,11 @@ final class RideTracker: RideControlling {
         )
         SavingsStore.shared.record(answer, from: here, context: "ride_arrival")
         SavingsStore.shared.recordHandsFree(context: "ride_arrival")
-        await announcer.announce(answer.text, title: "Docking near \(ride.destination.name)")
+        await announcer.announce(answer.text, title: "Docking near \(ride.destination.name)") {
+            if redirectsFromUsualDock {
+                ReviewPrompt.shared.recordSpokenRedirect()
+            }
+        }
 
         // Guidance starts before this ride's tracking stops, so location
         // keeps the app running throughout, and in its own task so stopping
@@ -254,16 +258,17 @@ final class RideTracker: RideControlling {
 
     /// Uses the saved place's current docks, in case they changed mid-ride.
     /// Failures become a spoken explanation rather than silence.
-    private static func arrivalAnswer(for ride: Ride) async -> DockAnswer {
+    private static func arrivalAnswer(for ride: Ride) async -> (DockAnswer, redirectsFromUsualDock: Bool) {
         do {
             if let id = ride.savedPlaceID, let place = SavedPlacesStore.shared.place(id: id) {
-                return try await DockFinderService.live.findDock(for: place).answer
+                let answer = try await DockFinderService.live.findDock(for: place).answer
+                return (answer, answer.redirects(from: place.usualStationID))
             }
-            return try await DockFinderService.live.findDock(near: ride.destination).answer
+            return (try await DockFinderService.live.findDock(near: ride.destination).answer, false)
         } catch let error as DockFinderError {
-            return DockAnswer(text: String(localized: error.localizedStringResource))
+            return (DockAnswer(text: String(localized: error.localizedStringResource)), false)
         } catch {
-            return DockAnswer(text: String(localized: DockFinderError.networkUnavailable.localizedStringResource))
+            return (DockAnswer(text: String(localized: DockFinderError.networkUnavailable.localizedStringResource)), false)
         }
     }
 

@@ -3,7 +3,9 @@
 //  Dock Finder
 //
 
+import StoreKit
 import SwiftUI
+import UIKit
 import UserNotifications
 
 @main
@@ -11,6 +13,7 @@ struct DockFinderApp: App {
     @State private var onboarding = OnboardingState()
     @State private var savedPlaces = SavedPlacesStore.shared
     @State private var rides = RideTracker.shared
+    @State private var reviewTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -43,10 +46,30 @@ struct DockFinderApp: App {
             .environment(rides)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
+            reviewTask?.cancel()
             // For the team's Users tab: last opened, and how often riders come back.
             if phase == .active {
                 Metrics.shared.logOpened()
+                // Sample eligibility here so a redirect spoken later in
+                // this foreground session waits for the next activation.
+                if ReviewPrompt.shared.state == .pendingReview {
+                    reviewTask = Task { @MainActor in
+                        guard !Task.isCancelled else { return }
+                        requestReviewIfPending()
+                    }
+                }
             }
+        }
+    }
+
+    private func requestReviewIfPending() {
+        guard ReviewPrompt.shared.state == .pendingReview,
+              let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive && $0.keyWindow != nil })
+        else { return }
+        if ReviewPrompt.shared.requestIfPending({ AppStore.requestReview(in: scene) }) {
+            Metrics.shared.log("app_store_review_requested")
         }
     }
 }

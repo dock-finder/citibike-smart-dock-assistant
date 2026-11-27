@@ -37,12 +37,12 @@ final class SynthesizerSpy: SpeechSynthesizing {
     /// Everything ever asked to be said, in order.
     private(set) var said: [String] = []
     private(set) var stopCount = 0
-    private var queued: [(text: String, done: () -> Void)] = []
+    private var queued: [(text: String, done: (Bool) -> Void)] = []
 
     var isSpeaking: Bool { !queued.isEmpty }
     var current: String? { queued.first?.text }
 
-    func speak(_ text: String, done: @escaping () -> Void) {
+    func speak(_ text: String, done: @escaping (Bool) -> Void) {
         said.append(text)
         queued.append((text, done))
     }
@@ -53,13 +53,13 @@ final class SynthesizerSpy: SpeechSynthesizing {
         stopCount += 1
         let stopped = queued
         queued.removeAll()
-        Task { @MainActor in stopped.forEach { $0.done() } }
+        Task { @MainActor in stopped.forEach { $0.done(false) } }
     }
 
     /// The utterance being said reaches its end.
     func finishCurrent() {
         guard !queued.isEmpty else { return }
-        queued.removeFirst().done()
+        queued.removeFirst().done(true)
     }
 }
 
@@ -176,8 +176,10 @@ struct AnnouncerTests {
         let announcer = announcer(synthesizer, session) { posted.append($0.identifier) }
 
         await announcer.speakAnswer("Nearest dock answer", title: "Nearest dock", notificationID: NearestDockAnnouncement.notificationID)
-        await announcer.announce("Arrival answer", title: "Docking near school")
+        var completed = false
+        await announcer.announce("Arrival answer", title: "Docking near school") { completed = true }
 
+        #expect(!completed)
         #expect(posted == ["action-button", "ride-arrival"])
         #expect(synthesizer.said.isEmpty)
     }
@@ -186,14 +188,19 @@ struct AnnouncerTests {
         let synthesizer = SynthesizerSpy()
         var levels: [UNNotificationInterruptionLevel] = []
         let announcer = announcer(synthesizer, AudioSessionSpy()) { levels.append($0.content.interruptionLevel) }
-        let arrival = Task { await announcer.announce("Arrival answer", title: "Docking near school") }
+        var completed = false
+        let arrival = Task {
+            await announcer.announce("Arrival answer", title: "Docking near school") { completed = true }
+        }
         #expect(await eventually { synthesizer.isSpeaking })
         // Nothing posted while it's being said, so Siri doesn't read it over the voice.
         #expect(levels.isEmpty)
+        #expect(!completed)
         synthesizer.finishCurrent()
         await arrival.value
         #expect(synthesizer.said == ["Arrival answer"])
         #expect(levels == [.passive])
+        #expect(completed)
     }
 
     /// The bug this guards against: each voice used to turn audio off when
